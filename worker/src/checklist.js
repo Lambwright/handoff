@@ -4,12 +4,15 @@
 // types it applies to; the seed keeps only the applicable ones.
 //
 // PUNCH's registry spans five types (T&M, Contract, Service Call, Warranty,
-// Overhead). HANDOFF only fires when an estimate becomes a project, so it likely
-// needs a subset.
-// TODO(ben): confirm exactly which project types actually get created via the
-// estimate -> project flow. Overhead and Warranty probably never come through it.
+// Overhead). CONFIRMED (Ben, 2026-09-04): only Contract and Service Call come
+// through the estimate -> project flow, and HANDOFF doesn't really need to
+// distinguish between them — every registry item below already treats the two
+// identically, so no per-item changes were needed, just this constant.
+// PROJECT_TYPES keeps all five so normalizeType() still degrades gracefully on
+// stray data instead of returning null; ESTIMATE_PROJECT_TYPES is the real
+// subset HANDOFF's flow is scoped to.
 export const PROJECT_TYPES = ["T&M", "Contract", "Service Call", "Warranty", "Overhead"];
-export const ESTIMATE_PROJECT_TYPES = ["T&M", "Contract", "Service Call"];
+export const ESTIMATE_PROJECT_TYPES = ["Contract", "Service Call"];
 
 const ALL = { "T&M": true, Contract: true, "Service Call": true, Warranty: true, Overhead: true };
 const CONTRACTISH = { "T&M": true, Contract: true, "Service Call": true, Warranty: false, Overhead: false };

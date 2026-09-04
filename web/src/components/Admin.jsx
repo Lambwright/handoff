@@ -5,9 +5,10 @@ const ROLES = ["estimator", "assignment", "pm", "admin"];
 
 function UsersTab() {
   const [users, setUsers] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [form, setForm] = useState({ einbau_username: "", name: "", role: "estimator" });
+  const [form, setForm] = useState({ einbau_username: "", name: "", role: "estimator", procore_department_id: "" });
   const [saving, setSaving] = useState(false);
 
   function load() {
@@ -19,6 +20,9 @@ function UsersTab() {
       .finally(() => setLoading(false));
   }
   useEffect(load, []);
+  useEffect(() => {
+    api.listDepartments().then((data) => setDepartments(data.departments || []));
+  }, []);
 
   async function save(e) {
     e.preventDefault();
@@ -27,7 +31,7 @@ function UsersTab() {
     setError(null);
     try {
       await api.upsertUser(form);
-      setForm({ einbau_username: "", name: "", role: "estimator" });
+      setForm({ einbau_username: "", name: "", role: "estimator", procore_department_id: "" });
       load();
     } catch (err) {
       setError(err.message);
@@ -56,7 +60,7 @@ function UsersTab() {
           </div>
           <div className="field" style={{ minWidth: 140 }}>
             <label>Role</label>
-            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value, procore_department_id: "" })}>
               {ROLES.map((r) => (
                 <option key={r} value={r}>
                   {r}
@@ -64,6 +68,20 @@ function UsersTab() {
               ))}
             </select>
           </div>
+          {form.role === "pm" && (
+            <div className="field" style={{ minWidth: 200 }}>
+              <label>Procore Department</label>
+              <select value={form.procore_department_id} onChange={(e) => setForm({ ...form, procore_department_id: e.target.value })}>
+                <option value="">— none yet —</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+              <span className="field-help">This list mixes departed employees and non-person buckets — pick carefully.</span>
+            </div>
+          )}
           <button className="btn btn-blue" disabled={saving} type="submit">
             {saving ? "Saving…" : "Save"}
           </button>
@@ -75,9 +93,10 @@ function UsersTab() {
 
       <div className="row-list">
         {users.map((u) => (
-          <div key={u.id} className="row-item" style={{ gridTemplateColumns: "1fr 1fr 100px 90px" }}>
+          <div key={u.id} className="row-item" style={{ gridTemplateColumns: "1fr 1fr 1fr 100px 90px" }}>
             <div className="row-primary">{u.name}</div>
             <div className="row-secondary">{u.einbau_username}</div>
+            <div className="row-secondary">{u.role === "pm" ? u.procore_department_name || "no Department mapped" : ""}</div>
             <div>
               <span className="badge badge-pending">{u.role}</span>
             </div>
@@ -97,6 +116,7 @@ function UsersTab() {
 
 function AffinityTab() {
   const [rows, setRows] = useState([]);
+  const [roster, setRoster] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [form, setForm] = useState({ region: "", client: "", job_type: "", preferred_pm: "", weight: 1, note: "" });
@@ -111,6 +131,13 @@ function AffinityTab() {
       .finally(() => setLoading(false));
   }
   useEffect(load, []);
+  useEffect(() => {
+    api.listPmRoster().then((data) => setRoster(data.roster || []));
+  }, []);
+
+  function pmName(id) {
+    return roster.find((r) => r.id === id)?.name || id;
+  }
 
   async function save(e) {
     e.preventDefault();
@@ -148,9 +175,17 @@ function AffinityTab() {
             <label>Job type</label>
             <input value={form.job_type} onChange={(e) => setForm({ ...form, job_type: e.target.value })} placeholder="e.g. Contract" />
           </div>
-          <div className="field" style={{ width: 140 }}>
-            <label>Preferred PM (Procore user id)</label>
-            <input value={form.preferred_pm} onChange={(e) => setForm({ ...form, preferred_pm: e.target.value })} />
+          <div className="field" style={{ width: 180 }}>
+            <label>Preferred PM</label>
+            <select value={form.preferred_pm} onChange={(e) => setForm({ ...form, preferred_pm: e.target.value })}>
+              <option value="">— pick a PM —</option>
+              {roster.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+            {roster.length === 0 && <span className="field-help">No pm-role users mapped to a Department yet — see Admin → Users.</span>}
           </div>
           <div className="field" style={{ width: 80 }}>
             <label>Weight</label>
@@ -175,7 +210,7 @@ function AffinityTab() {
             <div className="row-secondary">{r.region || "any region"}</div>
             <div className="row-secondary">{r.client || "any client"}</div>
             <div className="row-secondary">{r.job_type || "any type"}</div>
-            <div className="row-primary">{r.preferred_pm}</div>
+            <div className="row-primary">{pmName(r.preferred_pm)}</div>
             <div className="row-amount">{r.weight}</div>
           </div>
         ))}

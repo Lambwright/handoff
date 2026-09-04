@@ -1,12 +1,15 @@
 // ===========================================================================
-// procore-shapes.js — every Procore fact HANDOFF depends on that is NOT yet
-// confirmed against the sandbox lives here, behind a TODO(sandbox) marker, so
-// confirming each one is a single-file change. Nothing else in the worker should
-// hardcode a Procore path, payload wrapper, or field name.
+// procore-shapes.js — every Procore fact HANDOFF depends on lives here, so
+// confirming or correcting one is a single-file change. Nothing else in the
+// worker should hardcode a Procore path, payload wrapper, or field name.
 //
-// Sources for the current best guesses: punch-worker (proven live for stages,
-// projects PATCH, documents, forms, email_communications, vendors), tally-worker
-// (Direct Cost wrappers), and the HANDOFF kickoff doc.
+// Two tiers of confidence, marked inline:
+//   - CONFIRMED: proven live elsewhere in the suite (punch-worker's
+//     buildProcoreWriteback / buildProcoreChecklist are the primary source —
+//     that code was verified against real writes on this exact Procore
+//     account) or confirmed directly by Ben.
+//   - TODO(sandbox) / TODO(ben): still a guess; needs one real check before
+//     the dependent feature is trusted.
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
@@ -58,23 +61,101 @@ export const BID_BOARD = {
 
 // ---------------------------------------------------------------------------
 // Project stages
+//
+// CONFIRMED (Ben, 2026-09-04): the delineation between Active and Inactive
+// stages lives in the same place punch-worker's Budget Importer / Stage
+// Enforcer already use it — an INACTIVE deny-list, not an allow-list, checked
+// alongside Procore's own native `project.active` boolean. Three independent
+// call sites across PUNCH and TALLY agree on this set:
+//   - punch-worker's Portfolio sync excludes "Cancelled" outright
+//   - punch-worker's Budget Importer excludes "Cancelled", "Completed and
+//     Invoiced", "Overhead"
+//   - punch-worker's Stage Enforcer / TALLY's INACTIVE_STAGES both treat
+//     "On Hold" and "Completed and Invoiced" as needing a nudge back to
+//     attention
+// Unioned, that's the INACTIVE_STAGES set below. Follow the same deny-list
+// pattern here rather than trying to guess a positive "active stages" list.
 // ---------------------------------------------------------------------------
 export const STAGES = {
   // GET companies/{co}/project_stages — proven live in punch-worker.
   listPath: (companyId) => `/companies/${companyId}/project_stages`,
   version: "v1.0",
 
-  // TODO(sandbox): Ben to provide the exact active-stage name list, and which
-  // one a brand-new handed-off project should be created into. There is NO
-  // holding/"Pending Setup" stage in this model.
+  INACTIVE_STAGES: new Set(["Cancelled", "Completed and Invoiced", "On Hold", "Overhead"]),
+
+  // TODO(ben): which real construction stage should a brand-new handed-off
+  // project be created into? We know it must NOT be one of INACTIVE_STAGES —
+  // still need the specific stage name (e.g. "Bidding" / "Pre-Construction" /
+  // "Course of Construction" — Ben to confirm the account's actual stage
+  // names). There is NO holding/"Pending Setup" stage in this model.
   TARGET_CREATE_STAGE: "Course of Construction",
-  ACTIVE_STAGES: ["Course of Construction", "Bidding", "Pre-Construction"],
 
   idByName(stages, name) {
     const hit = (stages || []).find((s) => (s.name || "").toLowerCase() === (name || "").toLowerCase());
     return hit ? hit.id : null;
   },
+
+  // A project counts toward PM workload / is eligible to be handed off into
+  // only if Procore's own `active` flag is true AND its stage isn't one of the
+  // terminal/paused ones above.
+  isActiveStage(project) {
+    return project.active === true && !STAGES.INACTIVE_STAGES.has(PROJECT.extractStage(project));
+  },
 };
+
+// ---------------------------------------------------------------------------
+// Custom field IDs — CONFIRMED (punch-worker's PROCORE_CUSTOM_FIELDS, verified
+// live against this company's /custom_field_definitions). Specific to this
+// Procore account, not a general Procore convention. Custom fields are written
+// as flat project properties (`project.custom_field_<id>`), never nested under
+// a custom_fields wrapper — confirmed against a real Power Automate flow that
+// hit this exact trap on 2026-04-24.
+// ---------------------------------------------------------------------------
+export const PROCORE_CUSTOM_FIELDS = {
+  customer: 73165,
+  poNumber: 562949953929326,
+};
+
+// ---------------------------------------------------------------------------
+// Department — CONFIRMED (Ben, 2026-09-04): Einbau uses the project's
+// Department field on the admin page to indicate who is responsible for it.
+// This is what HANDOFF's PM assignment actually reads/writes — there is no
+// separate "Project Manager" field on the Procore project resource. There is
+// no public Procore endpoint for this dropdown's options (confirmed in
+// punch-worker), so the list is hardcoded, same as punch-worker does it.
+//
+// CAUTION (Ben): this list mixes real current PMs, people who no longer work
+// at Einbau, and non-person buckets ("Project Management", "Back Log", etc).
+// It is NOT a valid PM-candidate list on its own — HANDOFF's assignment engine
+// uses its own `users` table (role='pm', active=true, procore_department_id
+// set) as the curated candidate roster, and only uses this list to resolve a
+// department id to a display name and to populate the admin mapping UI.
+// ---------------------------------------------------------------------------
+export const PROCORE_DEPARTMENTS = [
+  { id: 562949953453259, name: "Warren Wagler" },
+  { id: 562949953487335, name: "Walter Corsetti" },
+  { id: 562949953507599, name: "Sunita Jackson" },
+  { id: 562949953498534, name: "Scot Carter-Nichols" },
+  { id: 562949953453256, name: "Rudi Dyck" },
+  { id: 562949953454803, name: "Project Management" },
+  { id: 562949953454805, name: "Project Logistics" },
+  { id: 562949953454802, name: "Project Estimation" },
+  { id: 562949953453255, name: "Peter Dyck" },
+  { id: 562949953454804, name: "Mel Gabriel" },
+  { id: 562949953492649, name: "Luigi Perna" },
+  { id: 562949953463907, name: "Kevin Smith" },
+  { id: 562949953453258, name: "Hal Rowan" },
+  { id: 562949953489165, name: "Elliot Natovitch" },
+  { id: 562949953482755, name: "Dwayne Rogers" },
+  { id: 562949953473800, name: "Devid Manzke" },
+  { id: 562949953489369, name: "Dave LeBlanc" },
+  { id: 562949953454806, name: "Danny Pagniello" },
+  { id: 562949953495200, name: "Chris Hong" },
+  { id: 562949953453257, name: "Ben Wright" },
+  { id: 562949953453261, name: "Back Log" },
+  { id: 562949953453265, name: "Alfonso Lopez" },
+  { id: 562949953497563, name: "Alex Reid" },
+];
 
 // ---------------------------------------------------------------------------
 // Project create + admin-field writes
@@ -102,7 +183,7 @@ export const PROJECT = {
     return { company_id: companyId, project };
   },
 
-  // TODO(sandbox): confirm the address field names on the project resource.
+  // CONFIRMED live (punch-worker's buildProcoreWriteback "address" case).
   buildAddressPatch({ companyId, address }) {
     return {
       company_id: companyId,
@@ -116,8 +197,7 @@ export const PROJECT = {
     };
   },
 
-  // TODO(sandbox): confirm the date field names — used both at create time and
-  // when a deferred timeline gap gets resolved after the project already exists.
+  // CONFIRMED live (punch-worker's buildProcoreWriteback "dates" case).
   buildTimelinePatch({ companyId, timeline }) {
     return {
       company_id: companyId,
@@ -128,33 +208,45 @@ export const PROJECT = {
     };
   },
 
-  // TODO(sandbox): confirm whether PO number is a first-class project field or a
-  // custom field on a fieldset (kickoff doc suggests it may be makeable
-  // hard-required via Company Admin regardless).
+  // CONFIRMED: PO number is a custom field on this account (poNumber:text),
+  // not a first-class project field — same wrapper punch-worker's writeback
+  // uses. (Kickoff doc's "make it hard-required via Company Admin" bonus still
+  // applies independently of this.)
   buildPoNumberPatch({ companyId, poNumber }) {
-    return { company_id: companyId, project: { po_number: poNumber } };
+    return { company_id: companyId, project: { [`custom_field_${PROCORE_CUSTOM_FIELDS.poNumber}`]: poNumber } };
   },
 
-  // TODO(sandbox): confirm the assigned-PM field. Could be
-  // `project_manager_id`, a `project_manager` object, or a role assignment via a
-  // separate endpoint.
-  buildAssignedPmPatch({ companyId, pmId }) {
-    return { company_id: companyId, project: { project_manager_id: pmId } };
+  // CONFIRMED (Ben, 2026-09-04): assignment is written via the project's
+  // Department field, `department_ids: [id]` — see PROCORE_DEPARTMENTS above.
+  // `departmentId` here is one of that list's numeric ids (resolved from the
+  // curated HANDOFF `users` row for the chosen PM, not typed free-form).
+  buildAssignedPmPatch({ companyId, departmentId }) {
+    return { company_id: companyId, project: { department_ids: [Number(departmentId)] } };
   },
 
-  // Full project list for workload aggregation. TODO(sandbox): confirm field
-  // names for the assigned PM, contract value, and project dates on the list
-  // response — these three extractors are the only things that need to change.
+  // Full project list for workload aggregation.
   listPath: () => `/projects`,
+
+  // CONFIRMED shape: `project.departments` is an ARRAY of {id, name} (a
+  // project can technically carry more than one; Einbau's admin-page UI is a
+  // single-select in practice, so the first entry is treated as *the*
+  // responsible department/PM). extractPm returns the department id as a
+  // string so it lines up with the string ids used elsewhere (pm_affinity,
+  // pm_workload_cache) without a repeated Number()/String() dance.
   extractPm(project) {
-    return project.project_manager?.id ? String(project.project_manager.id) : null;
+    const first = (project.departments || [])[0];
+    return first ? String(first.id) : null;
   },
   extractPmName(project) {
-    return project.project_manager?.name || null;
+    return (project.departments || [])[0]?.name || null;
   },
+  // TODO(sandbox): confirm the contract-value field name on the project list
+  // response (this account may carry it as a custom field, like Customer/PO —
+  // check /custom_field_definitions if `total_value` comes back empty).
   extractValue(project) {
     return Number(project.total_value ?? project.original_contract_value ?? 0) || 0;
   },
+  // CONFIRMED (punch-worker's buildProcoreChecklist "dates" case).
   extractTimeline(project) {
     return { start_date: project.start_date || null, end_date: project.completion_date || project.end_date || null };
   },
@@ -196,12 +288,12 @@ export const DIRECTORY = {
     };
   },
 
-  // TODO(sandbox): confirm the "Customer" field on the project is a Directory
-  // reference (kickoff doc: Procore custom-fields has a "Company" type that
-  // references the Project Directory). Set it as part of the same coordinated
-  // write, not via a free-text field.
+  // CONFIRMED: "Customer" is custom_field_73165 on this account (a Directory
+  // vendor id), matching the kickoff doc's guess that it's a real Directory
+  // reference dressed up as a custom field, not free text. Same wrapper
+  // punch-worker's writeback uses.
   buildCustomerPatch({ companyId, directoryId }) {
-    return { company_id: companyId, project: { customer_id: directoryId } };
+    return { company_id: companyId, project: { [`custom_field_${PROCORE_CUSTOM_FIELDS.customer}`]: directoryId } };
   },
 };
 
@@ -281,20 +373,6 @@ export const RESOURCE_PLANNING = {
         notes: note || undefined,
       },
     };
-  },
-};
-
-// ---------------------------------------------------------------------------
-// Company users (PM candidate list)
-// ---------------------------------------------------------------------------
-export const USERS = {
-  // TODO(sandbox): confirm how PM candidates are identified — a permission
-  // template, a job title, or an explicit configured list (kickoff open item).
-  listPath: (companyId) => `/companies/${companyId}/users`,
-  version: "v1.3",
-  isProjectManager(user) {
-    const title = (user.job_title || user.title || "").toLowerCase();
-    return title.includes("project manager") || title.includes("pm");
   },
 };
 

@@ -4,6 +4,7 @@
 
 import { json } from "./http.js";
 import { verifyIdentity, resolveActor } from "./auth.js";
+import { PROCORE_DEPARTMENTS } from "./procore-shapes.js";
 
 // Deliberately does NOT 403 when the caller has no HANDOFF role yet — the
 // frontend needs to tell the difference between "not logged in" and "logged in,
@@ -20,8 +21,19 @@ export async function getMe({ request, env, sql }) {
   );
 }
 
+// GET /departments — the static Procore Department option list, so the Admin
+// UI can offer a dropdown instead of asking someone to type a numeric id.
+// CAUTION carried through from procore-shapes.js: this list mixes real current
+// PMs with departed employees and non-person buckets — picking an entry here
+// doesn't mean it's a valid PM, only that it's a real option in Procore.
+export async function listDepartments() {
+  return json({ departments: PROCORE_DEPARTMENTS });
+}
+
 export async function listUsers({ sql }) {
-  const rows = await sql`select id, einbau_username, name, role, active, created_at from users order by name`;
+  const rows = await sql`
+    select id, einbau_username, name, role, active, procore_department_id, procore_department_name, created_at
+    from users order by name`;
   return json({ users: rows });
 }
 
@@ -37,12 +49,19 @@ export async function upsertUser({ request, sql, auth }) {
   const username = String(body.einbau_username).trim().toLowerCase();
   const active = body.active === undefined ? true : Boolean(body.active);
 
+  // Only role='pm' rows carry a Department mapping — the assignment engine's
+  // candidate roster is exactly the active pm-role users with one set.
+  const dept = role === "pm" && body.procore_department_id ? PROCORE_DEPARTMENTS.find((d) => String(d.id) === String(body.procore_department_id)) : null;
+  const departmentId = dept ? String(dept.id) : null;
+  const departmentName = dept ? dept.name : null;
+
   const [row] = await sql`
-    insert into users (einbau_username, name, role, active)
-    values (${username}, ${body.name}, ${role}, ${active})
+    insert into users (einbau_username, name, role, active, procore_department_id, procore_department_name)
+    values (${username}, ${body.name}, ${role}, ${active}, ${departmentId}, ${departmentName})
     on conflict (einbau_username) do update
-      set name = excluded.name, role = excluded.role, active = excluded.active
-    returning id, einbau_username, name, role, active, created_at`;
+      set name = excluded.name, role = excluded.role, active = excluded.active,
+          procore_department_id = excluded.procore_department_id, procore_department_name = excluded.procore_department_name
+    returning id, einbau_username, name, role, active, procore_department_id, procore_department_name, created_at`;
 
   return json({ user: row, upserted_by: auth.actor.einbau_username });
 }

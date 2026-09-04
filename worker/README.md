@@ -44,10 +44,43 @@ Point `DATABASE_URL` at a Neon **branch**, not production, while iterating.
    ```sql
    insert into users (einbau_username, name, role) values ('ben', 'Ben Wright', 'admin');
    ```
+7. **Map each real PM to their Procore Department** — Admin → Users, add a
+   `pm`-role user per PM, and pick their entry from the Department dropdown
+   (`GET /departments`). This is the actual PM-candidate roster the assignment
+   engine uses; Procore's own Department list mixes departed employees and
+   non-person buckets ("Project Management", "Back Log"), so nobody is a valid
+   candidate until an admin has explicitly mapped them here.
 
-## Before this is real: sandbox facts still to confirm
+## Confirmed against the live Procore account (2026-09-04)
 
-Every one of these lives behind a `TODO(sandbox)` comment in
+Sourced from `punch-worker`'s `buildProcoreWriteback` / `buildProcoreChecklist`
+(both verified against real writes on this account) plus direct answers from
+Ben — no longer guesses:
+
+- **Active vs. inactive stages**: `project.active === true` AND the stage isn't
+  one of `Cancelled` / `Completed and Invoiced` / `On Hold` / `Overhead`
+  (`STAGES.INACTIVE_STAGES` in `procore-shapes.js`). Still open: which specific
+  stage a brand-new handed-off project should be created into
+  (`STAGES.TARGET_CREATE_STAGE`).
+- **Project types**: only Contract and Service Call come through the estimate
+  → project flow (`checklist.js`'s `ESTIMATE_PROJECT_TYPES`); HANDOFF doesn't
+  need to distinguish between them.
+- **Customer** and **PO number** are custom fields on this account
+  (`custom_field_73165` / `custom_field_562949953929326`), written as flat
+  project properties, never nested under a `custom_fields` wrapper
+  (`PROCORE_CUSTOM_FIELDS` in `procore-shapes.js`).
+- **PM assignment** is the project's **Department** field
+  (`department_ids: [id]`, read back as `project.departments[]`) — there is no
+  separate "Project Manager" field on the project resource. The static option
+  list (`PROCORE_DEPARTMENTS`) has no live Procore endpoint, so it's hardcoded,
+  same as `punch-worker` does it. See step 7 above for why the roster used for
+  assignment is HANDOFF's own `users` table, not this raw list.
+- **Address** and **dates** field names were already right (matches
+  `punch-worker`'s confirmed shape exactly).
+
+## Still to confirm
+
+Everything below lives behind a `TODO(sandbox)` or `TODO(ben)` comment in
 [`src/procore-shapes.js`](src/procore-shapes.js) — confirming each is a
 single-file change, nothing else in the worker hardcodes a Procore path or
 field name:
@@ -55,20 +88,16 @@ field name:
 - The Bid Board endpoint + which field/value means **Awarded**.
 - The `POST /rest/v1.0/projects` payload that actually creates a Portfolio
   project, and which fields it accepts on create vs. only on a follow-up PATCH.
-- The **active project stage list** and which stage new projects should land
-  in (`STAGES.TARGET_CREATE_STAGE` / `STAGES.ACTIVE_STAGES` — Ben to provide;
-  do not ship a guess).
+- Which specific stage new projects should be created into
+  (`STAGES.TARGET_CREATE_STAGE`).
 - The Project-Directory → Company-Directory cascade on a real write (one
   sandbox write should confirm this — INTAKE has already observed it
   empirically once).
 - The project-level **Estimating** tool's REST surface for cost/hours/margin.
-- The assigned-PM field name for `PATCH /projects/:id`.
-- The PM-candidate signal (`USERS.isProjectManager` currently guesses off job
-  title — confirm the real signal with Ben).
 - The Resource Planning "request" endpoint + payload.
-- Which **project types** actually come through the estimate → project flow
-  (`checklist.js`'s `ESTIMATE_PROJECT_TYPES` — currently guessed as T&M /
-  Contract / Service Call).
+- The contract-value field name for PM-workload aggregation
+  (`PROJECT.extractValue` — may be a custom field too, check
+  `/custom_field_definitions` if `total_value` comes back empty).
 
 ## Notes
 

@@ -8,7 +8,7 @@
 
 import { json } from "./http.js";
 import { procoreFetch, procoreFetchAll } from "./procore.js";
-import { PROJECT, STAGES, USERS } from "./procore-shapes.js";
+import { PROJECT, STAGES } from "./procore-shapes.js";
 import { callClaude, extractJSON } from "./claude.js";
 import { batched } from "./util.js";
 import { generateBrief } from "./brief.js";
@@ -83,19 +83,26 @@ export function sortForDisplay(candidates) {
 
 async function loadActiveProjects(env) {
   const all = await procoreFetchAll(env, PROJECT.listPath(), { version: PROJECT.version, query: { company_id: env.PROCORE_COMPANY_ID } });
-  return all.filter((p) => STAGES.ACTIVE_STAGES.includes(PROJECT.extractStage(p)));
+  return all.filter(STAGES.isActiveStage);
 }
 
-async function loadPmDirectory(env) {
-  const { ok, data } = await procoreFetch(env, USERS.listPath(env.PROCORE_COMPANY_ID), { version: USERS.version });
-  if (!ok || !Array.isArray(data)) return [];
-  return data.filter(USERS.isProjectManager).map((u) => ({ id: String(u.id), name: u.name || `${u.first_name || ""} ${u.last_name || ""}`.trim() }));
+// The Procore Department dropdown itself is NOT a valid PM-candidate list —
+// confirmed by Ben: it mixes real current PMs, people who no longer work at
+// Einbau, and non-person buckets ("Project Management", "Back Log"). The
+// candidate roster is HANDOFF's own curated `users` table instead — an admin
+// maps each active pm-role person to their Department id once (Admin -> Users).
+async function loadPmDirectory(sql) {
+  const rows = await sql`
+    select procore_department_id, procore_department_name, name
+    from users
+    where role = 'pm' and active = true and procore_department_id is not null`;
+  return rows.map((r) => ({ id: r.procore_department_id, name: r.procore_department_name || r.name }));
 }
 
 async function computeCandidates(env, sql, project) {
   const [activeProjects, pmDirectory, affinityRows] = await Promise.all([
     loadActiveProjects(env),
-    loadPmDirectory(env),
+    loadPmDirectory(sql),
     sql`select * from pm_affinity`,
   ]);
 
@@ -123,6 +130,14 @@ async function computeCandidates(env, sql, project) {
 // ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
+
+// GET /pm-roster — the curated candidate list on its own, for UI that needs to
+// offer "pick a PM" without pulling full workload data (the affinity admin
+// form's preferred_pm dropdown, mainly). Any active HANDOFF role can read it.
+export async function getPmRoster({ sql }) {
+  const roster = await loadPmDirectory(sql);
+  return json({ roster });
+}
 
 export async function getAssignmentCandidates({ params, env, sql }) {
   const [project] = await sql`select * from projects where id = ${params.id}`;
@@ -195,7 +210,7 @@ export async function confirmAssignment({ params, request, env, sql, auth }) {
   const { ok, status, data } = await procoreFetch(env, PROJECT.patchPath(project.procore_project_id, env.PROCORE_COMPANY_ID), {
     method: "PATCH",
     version: PROJECT.version,
-    body: PROJECT.buildAssignedPmPatch({ companyId: env.PROCORE_COMPANY_ID, pmId: body.assigned_pm }),
+    body: PROJECT.buildAssignedPmPatch({ companyId: env.PROCORE_COMPANY_ID, departmentId: body.assigned_pm }),
   });
   if (!ok) {
     return json({ error: "procore_patch_failed", detail: `HTTP ${status}: ${JSON.stringify(data).slice(0, 300)}` }, 502);

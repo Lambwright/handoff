@@ -13,6 +13,7 @@
 //   GET  /admin/users                (admin) list HANDOFF users
 //   POST /admin/users                (admin) create/update a HANDOFF user role
 //   DELETE /admin/users/:id          (admin) deactivate
+//   GET  /departments                (any role) the static Procore Department option list
 //   GET  /bids                       (estimator, assignment, admin) Awarded Bid Board projects
 //   POST /handoffs                   (estimator, admin) open a handoff against a bid
 //   GET  /projects                   (any role) dashboard queue, ?status= filter
@@ -22,6 +23,7 @@
 //   POST /projects/:id/gate/po-document        (estimator, admin) upload -> R2
 //   POST /projects/:id/gate/tender-correspondence (estimator, admin) upload -> R2
 //   POST /projects/:id/gate/submit   (estimator, admin) run the create+distribute pipeline
+//   GET  /pm-roster                  (any role) the curated pm-role roster (id=Department id)
 //   GET  /assignment/:id/candidates  (assignment, admin) PM workload/affinity comparison
 //   POST /assignment/:id/recommend   (assignment, admin) Claude recommendation
 //   POST /assignment/:id/confirm     (assignment, admin) accept/override -> PATCH Procore
@@ -36,7 +38,7 @@
 import { json, preflight } from "./http.js";
 import { sqlFor } from "./db.js";
 import { makeRouter } from "./router.js";
-import { getMe, listUsers, upsertUser, deactivateUser } from "./admin.js";
+import { getMe, listUsers, upsertUser, deactivateUser, listDepartments } from "./admin.js";
 import { listAwardedBids, openHandoff } from "./bids.js";
 import { searchCustomerDirectory } from "./matching.js";
 import {
@@ -50,6 +52,7 @@ import {
   getAssignmentCandidates,
   postAssignmentRecommendation,
   confirmAssignment,
+  getPmRoster,
 } from "./assignment.js";
 import { getBrief } from "./brief.js";
 import { listAffinity, upsertAffinity } from "./affinity.js";
@@ -65,6 +68,7 @@ router.get("/me", getMe);
 router.get("/admin/users", { roles: ["admin"] }, listUsers);
 router.post("/admin/users", { roles: ["admin"] }, upsertUser);
 router.delete("/admin/users/:id", { roles: ["admin"] }, deactivateUser);
+router.get("/departments", { roles: [] }, listDepartments);
 
 router.get("/bids", { roles: ["estimator", "assignment"] }, listAwardedBids);
 router.post("/handoffs", { roles: ["estimator"] }, openHandoff);
@@ -82,6 +86,7 @@ router.post("/projects/:id/gate/tender-correspondence", { roles: ["estimator"] }
 );
 router.post("/projects/:id/gate/submit", { roles: ["estimator", "admin"] }, submitGate);
 
+router.get("/pm-roster", { roles: [] }, getPmRoster);
 router.get("/assignment/:id/candidates", { roles: ["assignment"] }, getAssignmentCandidates);
 router.post("/assignment/:id/recommend", { roles: ["assignment"] }, postAssignmentRecommendation);
 router.post("/assignment/:id/confirm", { roles: ["assignment"] }, confirmAssignment);

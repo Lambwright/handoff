@@ -36,6 +36,14 @@ create table users (
   name text not null,
   role text not null check (role in ('estimator','assignment','pm','admin')),
   active boolean not null default true,
+  -- For role='pm' only: which Procore Department option (see procore-shapes.js
+  -- PROCORE_DEPARTMENTS) this person is assigned as. Einbau's Department
+  -- dropdown mixes current PMs, departed employees, and non-person buckets
+  -- ("Project Management", "Back Log") -- confirmed by Ben -- so this table,
+  -- not the raw Department list, is the curated PM-candidate roster the
+  -- assignment engine actually uses.
+  procore_department_id text,
+  procore_department_name text,
   created_at timestamptz not null default now()
 );
 
@@ -99,7 +107,7 @@ create index idx_gate_tasks_project on gate_tasks (project_id);
 -- assignment decision. Timeline overlap matters as much as raw count.
 -- ---------------------------------------------------------------------------
 create table pm_workload_cache (
-  pm_id text primary key,                -- Procore user id (as text)
+  pm_id text primary key,                -- Procore Department id (as text)
   pm_name text,
   snapshot_at timestamptz not null default now(),
   active_project_count integer not null default 0,
@@ -116,7 +124,7 @@ create table pm_affinity (
   region text,
   client text,
   job_type text,
-  preferred_pm text not null,            -- Procore user id
+  preferred_pm text not null,            -- Procore Department id (matches users.procore_department_id)
   weight numeric not null default 1,
   note text,
   updated_by text,

@@ -70,7 +70,7 @@ export default function Assignment({ projectId }) {
     return (
       <div className="card" style={{ borderColor: "var(--green)" }}>
         <div className="card-title">PM Assigned</div>
-        <p>{project.name} is now assigned to {selected}. The handoff brief has been generated.</p>
+        <p>{project.name} is now assigned to {candidates.find((c) => c.pm_id === selected)?.pm_name || selected}. The handoff brief has been generated.</p>
         <a className="btn btn-blue" href={`#/project/${project.id}/brief`} style={{ marginTop: 10 }}>
           View Handoff Brief
         </a>

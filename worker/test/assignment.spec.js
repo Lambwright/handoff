@@ -24,11 +24,12 @@ describe("aggregateWorkload", () => {
   const newTimeline = { start_date: "2026-06-01", end_date: "2026-08-01" };
   // extractPm/extractValue/extractTimeline/extractStage read Procore-shaped
   // fields via procore-shapes.js's PROJECT adapters — this fixture matches
-  // those field names (project_manager.id, total_value, start_date/completion_date).
+  // those field names (departments[0].id, the confirmed PM-assignment field;
+  // total_value; start_date/completion_date).
   const activeProjects = [
-    { id: 1, project_manager: { id: 10, name: "Alex PM" }, total_value: 100000, start_date: "2026-05-01", completion_date: "2026-07-01" },
-    { id: 2, project_manager: { id: 10, name: "Alex PM" }, total_value: 50000, start_date: "2026-09-01", completion_date: "2026-10-01" },
-    { id: 3, project_manager: { id: 20, name: "Sam PM" }, total_value: 20000, start_date: "2026-06-15", completion_date: "2026-06-20" },
+    { id: 1, departments: [{ id: 10, name: "Alex PM" }], total_value: 100000, start_date: "2026-05-01", completion_date: "2026-07-01" },
+    { id: 2, departments: [{ id: 10, name: "Alex PM" }], total_value: 50000, start_date: "2026-09-01", completion_date: "2026-10-01" },
+    { id: 3, departments: [{ id: 20, name: "Sam PM" }], total_value: 20000, start_date: "2026-06-15", completion_date: "2026-06-20" },
   ];
 
   it("groups by PM and sums count/value", () => {

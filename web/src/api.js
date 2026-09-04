@@ -46,6 +46,8 @@ export const api = {
   listUsers: () => request("/admin/users"),
   upsertUser: (fields) => request("/admin/users", { method: "POST", body: fields }),
   deactivateUser: (id) => request(`/admin/users/${id}`, { method: "DELETE" }),
+  listDepartments: () => request("/departments"),
+  listPmRoster: () => request("/pm-roster"),
 
   listBids: () => request("/bids"),
   openHandoff: (bidId) => request("/handoffs", { method: "POST", body: { bid_id: bidId } }),

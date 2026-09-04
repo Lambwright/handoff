@@ -51,6 +51,28 @@ shape every file in this repo:
   `notifications` row and shown in the UI; nothing is actually sent yet. See
   `worker/README.md`.
 
+## Rollout: how estimators actually reach HANDOFF
+
+Two entry points, one API — `bids.js`'s `GET /bids` / `POST /handoffs` don't
+care which brought the estimator here:
+
+- **Standalone app (built, live path today)** — the `BidPicker` screen at
+  `#/bids`. Point estimators here directly.
+- **A sidebar on the estimate itself (future)** — Ben's preferred long-term UX:
+  open HANDOFF as a sidebar right on the Bid Board estimate being pushed,
+  pre-scoped to that one bid. The sidebar mechanism itself is being built in
+  **LEDGER** (a sibling app, not HANDOFF) — once it exists, wiring HANDOFF into
+  it should follow the same `window.opener`/`postMessage` handoff protocol
+  INTAKE already uses as a SCOUT popout (`scout-intake/README.md`): the host
+  posts `{token, bidId}`, HANDOFF verifies the token against `/auth/verify`
+  and deep-links straight to that bid's gate, skipping its own login/picker
+  screens. Not built yet since LEDGER's sidebar doesn't exist to integrate
+  against — tracked here so it isn't lost.
+- **Recommended operational step, either way**: Ben confirmed Einbau can
+  revoke estimators' native Procore permission to push a bid to the Portfolio
+  without reducing anything else they need — worth flipping once HANDOFF is
+  the trusted path, so it's the *only* path, not just the recommended one.
+
 ## Layout
 
 ```
