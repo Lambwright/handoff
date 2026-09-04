@@ -1,0 +1,65 @@
+/**
+ * handoff-worker — the Bid Board -> Portfolio handoff pipeline.
+ *
+ * HANDOFF houses a won bid's data, walks the estimator through the full Purgatory
+ * checklist, and only then creates the Procore project and distributes the housed
+ * data. There is no webhook and no reconciliation poll — HANDOFF owns creation.
+ *
+ * Wrangler config reference: https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "handoff-worker",
+	"main": "src/index.js",
+	"compatibility_date": "2026-09-03",
+	"observability": {
+		"enabled": true
+	},
+	"upload_source_maps": true,
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	// [vars] MUST be declared here before the first `wrangler deploy`. Deploying
+	// from a wrangler config with no [vars] block is treated as authoritative by
+	// Cloudflare and silently WIPES any plain (non-secret) vars previously set on
+	// the Worker in the dashboard — this bit procore-worker (wiped
+	// PROCORE_CLIENT_ID / PROCORE_COMPANY_ID) and cost a multi-day scramble.
+	// Encrypted secrets survive; plain vars do not.
+	"vars": {
+		"PROCORE_COMPANY_ID": "562949953508586",
+		// us02 is this account's regional data-plane host — the host PUNCH/TALLY
+		// proved for documents / forms / email_communications / budget / RP.
+		"PROCORE_API_BASE": "https://us02.procore.com",
+		"AUTH_WORKER_URL": "https://auth.ben-a90.workers.dev",
+		// Allowed GitHub Pages origin for CORS. Dev goes through Vite's proxy so it
+		// stays same-origin and never hits this.
+		"ALLOWED_ORIGIN": "https://lambwright.github.io"
+	},
+	// One schedule. NOT a trigger — HANDOFF has nothing to detect. This only
+	// refreshes the PM workload cache and runs the gate-staleness escalation tick.
+	// Every tick does a small, bounded batch of work (see BATCH_SIZE in util.js —
+	// this account's real per-invocation subrequest ceiling is ~8, far under the
+	// documented number).
+	"triggers": {
+		"crons": ["0 */6 * * *"]
+	},
+	// A Worker calling another Worker's *.workers.dev URL over plain fetch() gets
+	// blocked with Cloudflare error 1042 — the service binding is the supported way
+	// to reach auth-worker's /auth/verify. Same pattern as punch-worker / tally-worker.
+	"services": [
+		{ "binding": "AUTH_WORKER", "service": "auth" }
+	],
+	// Housed handoff documents (PO doc, tender correspondence) before they're
+	// pushed to Procore. NOT public — read back only through an authed route.
+	"r2_buckets": [
+		{ "binding": "DOCS", "bucket_name": "handoff-docs" }
+	]
+	/**
+	 * Secrets (set with `wrangler secret put <NAME>`):
+	 *   DATABASE_URL          - Neon Postgres connection string (the dedicated `handoff` project)
+	 *   ANTHROPIC_API_KEY     - Anthropic API key (scope summary + handoff brief)
+	 *   HANDOFF_SERVICE_KEY   - shared secret for non-browser callers (cron-issued internal calls)
+	 *   PROCORE_CLIENT_ID     - HANDOFF's own Procore data-connection client id (client_credentials)
+	 *   PROCORE_CLIENT_SECRET - HANDOFF's own Procore data-connection client secret
+	 */
+}
