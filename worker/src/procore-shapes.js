@@ -16,10 +16,12 @@
 // Bid Board
 // ---------------------------------------------------------------------------
 export const BID_BOARD = {
-  // TODO(sandbox): confirm the exact endpoint + version for the Bid Board list.
-  // Kickoff doc: procore-worker has a proven `/estimating/bid_board_projects`
-  // (v2.0) namespace that SCOUT populates. v2.0 paths through our own client are
-  // `/rest/v2.0/companies/{company_id}/...`.
+  // Path CONFIRMED by probe 2026-09-05: this exact path returns 403 "User is
+  // not authorized" (NOT 404 — the no-company-prefix variant 404s), so the
+  // path shape is right and the only thing missing is the Procore app's
+  // Estimating/Bidding permission. See worker/README "Still to confirm".
+  // TODO(sandbox): once Estimating access is granted, confirm the record shape
+  // + the Awarded signal (isAwarded / toDraft below are still guesses).
   listPath: (companyId) => `/companies/${companyId}/estimating/bid_board_projects`,
   version: "v2.0",
 
@@ -77,17 +79,32 @@ export const BID_BOARD = {
 // pattern here rather than trying to guess a positive "active stages" list.
 // ---------------------------------------------------------------------------
 export const STAGES = {
-  // GET companies/{co}/project_stages — proven live in punch-worker.
+  // GET companies/{co}/project_stages — CONFIRMED by probe 2026-09-05. The
+  // account's full stage list (id / name):
+  //   3                "Course of Construction"   (default_stage)
+  //   562949953421313  "Bidding"                  (is_bidding_stage)
+  //   562949953421314  "Pre-Construction"
+  //   562949953421315  "Warranty"
+  //   562949953421316  "Post-Construction"
+  //   562949953443621  "Construction - T&M"
+  //   562949953443622  "Overhead"
+  //   562949953483254  "Service Call"
+  //   5629499535107xx  "Course of Construction >25% / <25% / 50% / 75%"
+  //   562949953510803  "Significant Completion"
+  //   562949953510804  "Completed"
+  //   562949953510805  "Completed and Invoiced"
+  //   562949953510806  "Cancelled"
+  //   562949953514618  "Back Log"
+  //   562949953524467  "On Hold"
+  //   562949953524533  "Billing Review Required"
   listPath: (companyId) => `/companies/${companyId}/project_stages`,
   version: "v1.0",
 
   INACTIVE_STAGES: new Set(["Cancelled", "Completed and Invoiced", "On Hold", "Overhead"]),
 
-  // TODO(ben): which real construction stage should a brand-new handed-off
-  // project be created into? We know it must NOT be one of INACTIVE_STAGES —
-  // still need the specific stage name (e.g. "Bidding" / "Pre-Construction" /
-  // "Course of Construction" — Ben to confirm the account's actual stage
-  // names). There is NO holding/"Pending Setup" stage in this model.
+  // CONFIRMED: "Course of Construction" (id 3, default_stage) is the account's
+  // main active construction stage — a new handed-off project lands here.
+  // There is NO holding/"Pending Setup" stage in this model.
   TARGET_CREATE_STAGE: "Course of Construction",
 
   idByName(stages, name) {
@@ -104,12 +121,16 @@ export const STAGES = {
 };
 
 // ---------------------------------------------------------------------------
-// Custom field IDs — CONFIRMED (punch-worker's PROCORE_CUSTOM_FIELDS, verified
-// live against this company's /custom_field_definitions). Specific to this
-// Procore account, not a general Procore convention. Custom fields are written
-// as flat project properties (`project.custom_field_<id>`), never nested under
-// a custom_fields wrapper — confirmed against a real Power Automate flow that
-// hit this exact trap on 2026-04-24.
+// Custom field IDs — CONFIRMED twice over: punch-worker's PROCORE_CUSTOM_FIELDS
+// (verified against real writes) AND a HANDOFF probe 2026-09-05 that read them
+// straight off a live project:
+//   custom_field_73165           -> {data_type:"vendor", value:{id, label}}   (Customer)
+//   custom_field_562949953929326 -> {data_type:"string", value:"tbd"}         (PO Number)
+//   custom_field_562949953942386 -> {data_type:"lov_entry", value:{id,label}} (Currency, unused here)
+// Reads come back nested under `project.custom_fields.custom_field_<id>.value`;
+// WRITES go as flat project properties (`project.custom_field_<id> = <id|string>`),
+// never nested — confirmed against a real Power Automate flow that hit this
+// exact trap on 2026-04-24.
 // ---------------------------------------------------------------------------
 export const PROCORE_CUSTOM_FIELDS = {
   customer: 73165,
@@ -168,18 +189,25 @@ export const PROJECT = {
   // wrapper.
   createPath: () => `/projects`,
   patchPath: (projectId, companyId) => `/projects/${projectId}?company_id=${companyId}`,
+  // Single-project GET — returns `departments`, `project_type`, full
+  // `custom_fields`, etc. that the LIST endpoint omits (confirmed by probe
+  // 2026-09-05; `?view=extended` on the list does NOT add them).
+  getPath: (projectId, companyId) => `/projects/${projectId}?company_id=${companyId}`,
   version: "v1.0",
 
+  // TODO(sandbox): no real create has been run yet. Field names below are the
+  // PATCH-confirmed ones (project_stage_id / start_date / completion_date) plus
+  // guesses for type. Confirm with one sandbox create before trusting.
   buildCreatePayload({ companyId, name, projectNumber, projectType, stageId, timeline }) {
     const project = {
       name,
       project_number: projectNumber || undefined,
       active: true,
     };
-    if (stageId) project.project_stage_id = stageId; // TODO(sandbox): field name
+    if (stageId) project.project_stage_id = stageId; // CONFIRMED field name (writeback)
     if (projectType) project.type = projectType; // TODO(sandbox): likely project_type_id
-    if (timeline?.start_date) project.start_date = timeline.start_date;
-    if (timeline?.end_date) project.completion_date = timeline.end_date; // TODO(sandbox)
+    if (timeline?.start_date) project.start_date = timeline.start_date; // CONFIRMED
+    if (timeline?.end_date) project.completion_date = timeline.end_date; // CONFIRMED
     return { company_id: companyId, project };
   },
 
@@ -224,15 +252,20 @@ export const PROJECT = {
     return { company_id: companyId, project: { department_ids: [Number(departmentId)] } };
   },
 
-  // Full project list for workload aggregation.
+  // Full project list for workload aggregation. NOTE (probe 2026-09-05): the
+  // list response carries id / active / project_stage / start_date /
+  // completion_date / total_value / custom_fields — but NOT `departments`.
+  // assignment.js must hydrate `departments` per project via getPath() (the
+  // single GET) before extractPm() returns anything.
   listPath: () => `/projects`,
 
-  // CONFIRMED shape: `project.departments` is an ARRAY of {id, name} (a
-  // project can technically carry more than one; Einbau's admin-page UI is a
-  // single-select in practice, so the first entry is treated as *the*
-  // responsible department/PM). extractPm returns the department id as a
-  // string so it lines up with the string ids used elsewhere (pm_affinity,
-  // pm_workload_cache) without a repeated Number()/String() dance.
+  // CONFIRMED shape (probe 2026-09-05): `project.departments` is an ARRAY of
+  // {id, name} — e.g. [{"id":562949953498534,"name":"Scot Carter-Nichols"}] —
+  // matching PROCORE_DEPARTMENTS exactly. Only present on the single GET.
+  // Einbau's admin-page UI is single-select in practice, so the first entry is
+  // treated as *the* responsible department/PM. extractPm returns the id as a
+  // string to line up with pm_affinity / pm_workload_cache / users without a
+  // repeated Number()/String() dance.
   extractPm(project) {
     const first = (project.departments || [])[0];
     return first ? String(first.id) : null;
@@ -240,9 +273,8 @@ export const PROJECT = {
   extractPmName(project) {
     return (project.departments || [])[0]?.name || null;
   },
-  // TODO(sandbox): confirm the contract-value field name on the project list
-  // response (this account may carry it as a custom field, like Customer/PO —
-  // check /custom_field_definitions if `total_value` comes back empty).
+  // CONFIRMED (probe 2026-09-05): `total_value` is a top-level field, a STRING
+  // ("3840.0"). Number() handles it.
   extractValue(project) {
     return Number(project.total_value ?? project.original_contract_value ?? 0) || 0;
   },
@@ -250,6 +282,8 @@ export const PROJECT = {
   extractTimeline(project) {
     return { start_date: project.start_date || null, end_date: project.completion_date || project.end_date || null };
   },
+  // CONFIRMED (probe 2026-09-05): both `project_stage: {id, name}` and a flat
+  // `stage` string come back on the list AND the single GET.
   extractStage(project) {
     return project.project_stage?.name || project.stage || null;
   },
@@ -260,7 +294,8 @@ export const PROJECT = {
 // ---------------------------------------------------------------------------
 export const DIRECTORY = {
   // /vendors holds EVERY company in the Directory (customers, subs, Einbau
-  // itself) — there is no separate customers endpoint. Proven in punch-worker.
+  // itself) — there is no separate customers endpoint. CONFIRMED 200 by probe
+  // 2026-09-05 (returns {id, address, authorized_bidder, bidding:{...}, ...}).
   listVendorsPath: (companyId) => `/vendors?company_id=${companyId}`,
   version: "v1.0",
 
@@ -333,10 +368,12 @@ export const EMAIL_TOOL = {
 // Project-level Estimating tool (cost / labour hours / margin for the brief)
 // ---------------------------------------------------------------------------
 export const ESTIMATING = {
-  // TODO(sandbox): confirm the REST surface for the project-level Estimating
-  // tool's Summary view. Kickoff doc: try a sibling of the proven
-  // `/estimating/bid_board_projects` namespace. This data never has to leave
-  // Procore (sidesteps the SCOUT->NetSuite write-leg risk).
+  // TODO(sandbox): the guessed path below returned 404 on probe 2026-09-05
+  // (v2.0). Still need to find the real REST surface for the project-level
+  // Estimating tool's Summary view — likely also gated behind the same
+  // Estimating permission that's currently blocking the Bid Board, so re-probe
+  // once that's granted. This data never has to leave Procore (sidesteps the
+  // SCOUT->NetSuite write-leg risk).
   summaryPath: (projectId) => `/projects/${projectId}/estimating/summary`,
   version: "v2.0",
 

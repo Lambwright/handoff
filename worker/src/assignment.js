@@ -81,9 +81,28 @@ export function sortForDisplay(candidates) {
 // Procore-backed loaders
 // ---------------------------------------------------------------------------
 
+// The list endpoint gives everything workload aggregation needs EXCEPT
+// `departments` (confirmed by probe 2026-09-05 — not on the list at all, even
+// with view=extended). So: list + filter to active first (cheap), then hydrate
+// only the active ones with a per-project GET, batched at the subrequest
+// ceiling. On a large active portfolio this is a lot of GETs; the 6h cron
+// warms pm_workload_cache so an assignment screen rarely pays the full cost
+// live. TODO(perf): if this gets slow, check whether Procore's project list
+// supports filters[project_stage_id] / filters[department_id] to prune first.
 async function loadActiveProjects(env) {
-  const all = await procoreFetchAll(env, PROJECT.listPath(), { version: PROJECT.version, query: { company_id: env.PROCORE_COMPANY_ID } });
-  return all.filter(STAGES.isActiveStage);
+  const all = await procoreFetchAll(env, PROJECT.listPath(), {
+    version: PROJECT.version,
+    query: { company_id: env.PROCORE_COMPANY_ID },
+  });
+  const active = all.filter(STAGES.isActiveStage);
+
+  const hydrated = await batched(active, async (p) => {
+    const { ok, data } = await procoreFetch(env, PROJECT.getPath(p.id, env.PROCORE_COMPANY_ID), {
+      version: PROJECT.version,
+    });
+    return ok && data ? { ...p, departments: data.departments || [] } : p;
+  });
+  return hydrated;
 }
 
 // The Procore Department dropdown itself is NOT a valid PM-candidate list —

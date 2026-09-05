@@ -4,7 +4,28 @@
 
 import { json } from "./http.js";
 import { verifyIdentity, resolveActor } from "./auth.js";
+import { procoreFetch } from "./procore.js";
 import { PROCORE_DEPARTMENTS } from "./procore-shapes.js";
+
+// TEMPORARY diagnostic — an authenticated passthrough to an arbitrary Procore
+// REST path, used to nail down the real endpoint/response shapes the
+// TODO(sandbox) markers in procore-shapes.js are still guessing at. Same trick
+// punch-worker used (`/admin/procore-probe`). Admin-only. Delete this route and
+// handler once procore-shapes.js is filled in for real.
+//   POST /admin/procore-probe  { path, version?, method?, body?, query? }
+export async function procoreProbe({ request, env }) {
+  const b = await request.json().catch(() => ({}));
+  if (!b.path) {
+    return json({ error: "invalid_request", detail: 'path is required, e.g. "/companies/<co>/project_stages"' }, 400);
+  }
+  const result = await procoreFetch(env, b.path, {
+    method: b.method || "GET",
+    version: b.version || "v1.0",
+    body: b.body,
+    query: b.query,
+  });
+  return json(result);
+}
 
 // Deliberately does NOT 403 when the caller has no HANDOFF role yet — the
 // frontend needs to tell the difference between "not logged in" and "logged in,

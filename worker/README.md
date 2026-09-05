@@ -51,53 +51,62 @@ Point `DATABASE_URL` at a Neon **branch**, not production, while iterating.
    non-person buckets ("Project Management", "Back Log"), so nobody is a valid
    candidate until an admin has explicitly mapped them here.
 
-## Confirmed against the live Procore account (2026-09-04)
+## Confirmed against the live Procore account
 
-Sourced from `punch-worker`'s `buildProcoreWriteback` / `buildProcoreChecklist`
-(both verified against real writes on this account) plus direct answers from
-Ben — no longer guesses:
+Via `punch-worker`'s verified writeback code, direct answers from Ben, and a
+live probe run on 2026-09-05 (temporary `/admin/procore-probe` route against the
+deployed Worker's own Procore OAuth):
 
-- **Active vs. inactive stages**: `project.active === true` AND the stage isn't
-  one of `Cancelled` / `Completed and Invoiced` / `On Hold` / `Overhead`
-  (`STAGES.INACTIVE_STAGES` in `procore-shapes.js`). Still open: which specific
-  stage a brand-new handed-off project should be created into
-  (`STAGES.TARGET_CREATE_STAGE`).
-- **Project types**: only Contract and Service Call come through the estimate
-  → project flow (`checklist.js`'s `ESTIMATE_PROJECT_TYPES`); HANDOFF doesn't
-  need to distinguish between them.
-- **Customer** and **PO number** are custom fields on this account
-  (`custom_field_73165` / `custom_field_562949953929326`), written as flat
-  project properties, never nested under a `custom_fields` wrapper
-  (`PROCORE_CUSTOM_FIELDS` in `procore-shapes.js`).
-- **PM assignment** is the project's **Department** field
-  (`department_ids: [id]`, read back as `project.departments[]`) — there is no
-  separate "Project Manager" field on the project resource. The static option
-  list (`PROCORE_DEPARTMENTS`) has no live Procore endpoint, so it's hardcoded,
-  same as `punch-worker` does it. See step 7 above for why the roster used for
-  assignment is HANDOFF's own `users` table, not this raw list.
-- **Address** and **dates** field names were already right (matches
-  `punch-worker`'s confirmed shape exactly).
+- **Procore OAuth** works — HANDOFF's own `client_credentials` app authenticates
+  and the app has broad company **read** access: `/projects`, `/vendors`
+  (Directory), `/companies/{co}/project_stages`, `/companies/{co}/project_regions`
+  all return 200.
+- **Stage list** — the account's real stages are enumerated in
+  `procore-shapes.js` `STAGES`. `"Course of Construction"` (id `3`,
+  `default_stage`) is the account's main active construction stage and is what a
+  new handed-off project is created into (`STAGES.TARGET_CREATE_STAGE`). The
+  inactive set (`Cancelled` / `Completed and Invoiced` / `On Hold` / `Overhead`)
+  all check out as real names.
+- **Active vs. inactive**: `project.active === true` AND stage not in
+  `STAGES.INACTIVE_STAGES`.
+- **Project types**: only Contract and Service Call come through the estimate →
+  project flow; HANDOFF doesn't distinguish between them.
+- **Customer / PO number** — read straight off a live project:
+  `custom_field_73165` (`{data_type:"vendor", value:{id,label}}`) and
+  `custom_field_562949953929326` (`{data_type:"string"}`). Reads are nested
+  under `project.custom_fields.custom_field_<id>.value`; writes are flat
+  (`project.custom_field_<id> = <id|string>`).
+- **PM assignment** — the project's **Department** field, `department_ids:[id]`
+  on write, `project.departments: [{id, name}]` on read (e.g.
+  `[{id:562949953498534, name:"Scot Carter-Nichols"}]`, matching
+  `PROCORE_DEPARTMENTS`). **`departments` only appears on the single-project
+  GET, not the list endpoint** — `assignment.js`'s `loadActiveProjects` hydrates
+  it per-project. No live Procore endpoint for the Department option list, so
+  `PROCORE_DEPARTMENTS` stays hardcoded (same as `punch-worker`). Step 7 above:
+  the assignment roster is HANDOFF's own curated `users` table, not this raw list.
+- **`total_value`** — top-level project field, a string (`"3840.0"`); `Number()`
+  handles it. `project_stage.name`, `start_date`, `completion_date` all confirmed.
+- **Address / dates** field names were already right.
 
 ## Still to confirm
 
-Everything below lives behind a `TODO(sandbox)` or `TODO(ben)` comment in
-[`src/procore-shapes.js`](src/procore-shapes.js) — confirming each is a
-single-file change, nothing else in the worker hardcodes a Procore path or
-field name:
+Everything below is behind a `TODO(sandbox)` / `TODO(ben)` comment in
+[`src/procore-shapes.js`](src/procore-shapes.js):
 
-- The Bid Board endpoint + which field/value means **Awarded**.
-- The `POST /rest/v1.0/projects` payload that actually creates a Portfolio
-  project, and which fields it accepts on create vs. only on a follow-up PATCH.
-- Which specific stage new projects should be created into
-  (`STAGES.TARGET_CREATE_STAGE`).
-- The Project-Directory → Company-Directory cascade on a real write (one
-  sandbox write should confirm this — INTAKE has already observed it
-  empirically once).
-- The project-level **Estimating** tool's REST surface for cost/hours/margin.
+- **Bid Board — BLOCKED ON PERMISSION.** The path
+  (`/rest/v2.0/companies/{co}/estimating/bid_board_projects`) is correct — it
+  returns **403 "not authorized"**, not 404. The Procore app needs the
+  **Estimating / Bidding** tool permission added (Developer Portal → app →
+  Permissions, and/or the service account's company permission template). Once
+  granted, re-probe to confirm the record shape + the "Awarded" signal
+  (`BID_BOARD.isAwarded` / `toDraft`).
+- The `POST /rest/v1.0/projects` create payload (no real create has been run
+  yet — PATCH field names are confirmed, `type` on create is still a guess).
+- The Project-Directory → Company-Directory cascade on a real write.
+- The project-level **Estimating** tool's REST surface for cost/hours/margin —
+  the guessed `/projects/{id}/estimating/summary` (v2.0) returned **404**;
+  likely also behind the Estimating permission, re-probe once that's granted.
 - The Resource Planning "request" endpoint + payload.
-- The contract-value field name for PM-workload aggregation
-  (`PROJECT.extractValue` — may be a custom field too, check
-  `/custom_field_definitions` if `total_value` comes back empty).
 
 ## Notes
 
