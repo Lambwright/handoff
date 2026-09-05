@@ -71,7 +71,7 @@ export default function Assignment({ projectId }) {
       <div className="card" style={{ borderColor: "var(--green)" }}>
         <div className="card-title">PM Assigned</div>
         <p>{project.name} is now assigned to {candidates.find((c) => c.pm_id === selected)?.pm_name || selected}. The handoff brief has been generated.</p>
-        <a className="btn btn-blue" href={`#/project/${project.id}/brief`} style={{ marginTop: 10 }}>
+        <a className="btn btn-accent" href={`#/project/${project.id}/brief`} style={{ marginTop: 10 }}>
           View Handoff Brief
         </a>
       </div>
@@ -98,7 +98,7 @@ export default function Assignment({ projectId }) {
       {error && <div className="card" style={{ color: "var(--red)" }}>{error}</div>}
 
       {!recommendation && (
-        <button className="btn btn-blue" disabled={recommending || candidates.length === 0} onClick={getRecommendation} style={{ marginBottom: 16 }}>
+        <button className="btn btn-accent" disabled={recommending || candidates.length === 0} onClick={getRecommendation} style={{ marginBottom: 16 }}>
           {recommending ? "Thinking…" : "Get Recommendation"}
         </button>
       )}
@@ -123,7 +123,7 @@ export default function Assignment({ projectId }) {
               <YAxis stroke="var(--text-secondary)" fontSize={11} />
               <Tooltip contentStyle={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", fontSize: 12 }} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="Active projects" fill="var(--blue)" />
+              <Bar dataKey="Active projects" fill="var(--accent)" />
               <Bar dataKey="Contract value ($k)" fill="var(--green)" />
               <Bar dataKey="Overlap days" fill="var(--yellow)" />
             </BarChart>
@@ -150,7 +150,7 @@ export default function Assignment({ projectId }) {
         ))}
       </div>
 
-      <button className="btn btn-blue" disabled={!selected || confirming} onClick={confirm} style={{ marginTop: 12 }}>
+      <button className="btn btn-accent" disabled={!selected || confirming} onClick={confirm} style={{ marginTop: 12 }}>
         {confirming ? "Confirming…" : selected ? `Assign to ${candidates.find((c) => c.pm_id === selected)?.pm_name || selected}` : "Pick a PM"}
       </button>
     </div>

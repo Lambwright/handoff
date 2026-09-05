@@ -1,6 +1,7 @@
 /* HANDOFF visual tokens — matched to the suite's dark palette (PUNCH's source,
-   via TALLY) with the accent swapped to a steel blue: green is SCOUT/INTAKE,
-   orange is TALLY, blue is HANDOFF. No light variant in the suite yet. */
+   via TALLY). Accent is a deep aquamarine: green is SCOUT/INTAKE, orange is
+   TALLY, aquamarine is HANDOFF, blue is reserved for LEDGER. No light variant
+   in the suite yet. */
 :root {
   --bg-page: #1E1C1A;
   --bg-card: #2A2724;
@@ -12,8 +13,12 @@
   --text-secondary: #8A8375;
   --text-tertiary: #5C5850;
 
-  --blue: #4B8FD1;
-  --blue-dark: #3A73AC;
+  /* HANDOFF's accent: a deep aquamarine — sits between SCOUT/INTAKE's leaf
+     green and a true blue (LEDGER's territory). Change these three lines to
+     re-shade the whole app; --accent-rgb feeds the translucent tints. */
+  --accent: #1CA594;
+  --accent-dark: #15806F;
+  --accent-rgb: 28, 165, 148;
   --red: #D14343;
   --red-light: #1a0a0a;
   --red-border: #7f1d1d;
@@ -93,7 +98,7 @@ body {
   cursor: pointer;
 }
 .header-nav a:hover, .header-nav button.linklike:hover { color: var(--text-primary); border-color: var(--border-color); }
-.header-nav a.current { color: var(--blue); background: rgba(75,143,209,0.1); border-color: var(--blue); }
+.header-nav a.current { color: var(--accent); background: rgba(var(--accent-rgb),0.1); border-color: var(--accent); }
 
 .app-switcher { position: relative; }
 .app-switcher-caret { font-size: 11px; margin-left: 6px; color: var(--text-tertiary); vertical-align: middle; }
@@ -110,7 +115,7 @@ body {
 }
 .app-switcher-item:last-child { border-bottom: none; }
 .app-switcher-item:hover { background: var(--bg-page); color: var(--text-primary); }
-.app-switcher-item.current { color: var(--blue); background: rgba(75,143,209,0.08); }
+.app-switcher-item.current { color: var(--accent); background: rgba(var(--accent-rgb),0.08); }
 .app-switcher-item.disabled { color: var(--text-tertiary); cursor: default; }
 .app-switcher-soon { font-size: 9px; font-weight: 400; color: var(--text-tertiary); }
 
@@ -154,7 +159,7 @@ body {
   transition: all 0.15s;
 }
 .tab:hover { color: var(--text-primary); border-color: var(--text-tertiary); }
-.tab.active { color: var(--blue); background: rgba(75,143,209,0.1); border-color: var(--blue); }
+.tab.active { color: var(--accent); background: rgba(var(--accent-rgb),0.1); border-color: var(--accent); }
 .tab-count { opacity: 0.7; margin-left: 4px; }
 
 .field { display: flex; flex-direction: column; gap: 5px; }
@@ -172,8 +177,8 @@ body {
 }
 .field input:focus, .field select:focus, .field textarea:focus {
   outline: none;
-  border-color: var(--blue);
-  box-shadow: 0 0 0 3px rgba(75,143,209,0.15);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb),0.15);
 }
 .field-help { font-size: 11px; color: var(--text-tertiary); }
 
@@ -193,9 +198,9 @@ body {
   white-space: nowrap;
   letter-spacing: 0.05em;
 }
-.btn-blue { background: var(--blue); color: #16232f; }
-.btn-blue:hover:not(:disabled) { background: var(--blue-dark); box-shadow: 0 2px 8px rgba(75,143,209,0.4); }
-.btn-blue:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-accent { background: var(--accent); color: #06201b; }
+.btn-accent:hover:not(:disabled) { background: var(--accent-dark); box-shadow: 0 2px 8px rgba(var(--accent-rgb),0.4); }
+.btn-accent:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-ghost { background: var(--bg-card); color: var(--text-secondary); border: 1px solid var(--border-input); }
 .btn-ghost:hover { color: var(--text-primary); border-color: var(--text-tertiary); }
 .btn-danger { background: transparent; color: var(--red); border: 1px solid var(--red-border); }
@@ -215,14 +220,14 @@ body {
   border-radius: 3px;
 }
 .badge-gate { background: rgba(209,169,63,0.15); color: var(--yellow); }
-.badge-creating, .badge-assigning { background: rgba(75,143,209,0.15); color: var(--blue); }
+.badge-creating, .badge-assigning { background: rgba(var(--accent-rgb),0.15); color: var(--accent); }
 .badge-assigned { background: rgba(111,179,92,0.12); color: var(--green); }
 .badge-complete { background: rgba(111,179,92,0.15); color: var(--green); }
 .badge-cancelled { background: rgba(140,140,140,0.15); color: var(--text-tertiary); }
 .badge-pending { background: rgba(255,255,255,0.05); color: var(--text-secondary); }
 .badge-deferred { background: rgba(209,169,63,0.12); color: var(--yellow); }
 .badge-verify_failed { background: rgba(209,67,67,0.12); color: var(--red); }
-.badge-verifying { background: rgba(75,143,209,0.12); color: var(--blue); }
+.badge-verifying { background: rgba(var(--accent-rgb),0.12); color: var(--accent); }
 
 .flag {
   display: flex;
@@ -251,7 +256,7 @@ body {
   cursor: pointer;
   transition: border-color 0.15s;
 }
-.row-item:hover { border-color: var(--blue); }
+.row-item:hover { border-color: var(--accent); }
 .row-primary { font-weight: 600; }
 .row-secondary { color: var(--text-secondary); font-size: 12px; }
 .row-amount { font-family: 'JetBrains Mono', monospace; text-align: right; }
@@ -308,8 +313,8 @@ body {
   border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px;
   background: var(--bg-page); cursor: pointer; transition: border-color 0.15s;
 }
-.candidate-card:hover { border-color: var(--blue); }
-.candidate-card.selected { border-color: var(--blue); background: rgba(75,143,209,0.06); }
+.candidate-card:hover { border-color: var(--accent); }
+.candidate-card.selected { border-color: var(--accent); background: rgba(var(--accent-rgb),0.06); }
 .candidate-card.recommended { border-color: var(--green); }
 .candidate-name { font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
 .candidate-stat { font-size: 11px; color: var(--text-secondary); display: flex; justify-content: space-between; }
@@ -318,5 +323,5 @@ body {
 
 /* --- Brief --- */
 .brief-section { margin-bottom: 14px; }
-.brief-section-title { font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--blue); margin-bottom: 4px; }
+.brief-section-title { font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); margin-bottom: 4px; }
 .brief-section-body { font-size: 13px; line-height: 1.5; color: var(--text-primary); white-space: pre-wrap; }

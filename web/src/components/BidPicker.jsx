@@ -55,7 +55,7 @@ export default function BidPicker() {
             </div>
             <div className="row-secondary">{bid.customer_name || "—"}</div>
             <div className="row-secondary">{[bid.city, bid.state_code].filter(Boolean).join(", ") || "—"}</div>
-            <button className="btn btn-blue btn-sm" disabled={opening === bid.bid_id} onClick={() => open(bid)}>
+            <button className="btn btn-accent btn-sm" disabled={opening === bid.bid_id} onClick={() => open(bid)}>
               {bid.handoff_project_id ? "Resume" : opening === bid.bid_id ? "Opening…" : "Start Handoff"}
             </button>
           </div>

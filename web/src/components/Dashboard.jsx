@@ -42,7 +42,7 @@ export default function Dashboard({ actor }) {
           ))}
         </div>
         {(actor?.role === "estimator" || actor?.role === "admin") && (
-          <a className="btn btn-blue" href="#/bids">
+          <a className="btn btn-accent" href="#/bids">
             + Start a Handoff
           </a>
         )}

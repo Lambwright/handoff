@@ -39,7 +39,7 @@ export default function LoginScreen({ onLoggedIn }) {
           <input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
         {error && <div className="login-error">{error}</div>}
-        <button className="btn btn-blue" type="submit" disabled={busy} style={{ marginTop: 16, width: "100%", justifyContent: "center" }}>
+        <button className="btn btn-accent" type="submit" disabled={busy} style={{ marginTop: 16, width: "100%", justifyContent: "center" }}>
           {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>

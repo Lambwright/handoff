@@ -78,14 +78,14 @@ export default function PurgatoryGate({ projectId }) {
           This handoff has already been submitted — Procore project #{project.procore_project_id || "?"} was created.
           {project.status === "assigning" && (
             <div style={{ marginTop: 10 }}>
-              <a className="btn btn-blue btn-sm" href={`#/project/${project.id}/assignment`}>
+              <a className="btn btn-accent btn-sm" href={`#/project/${project.id}/assignment`}>
                 Go to PM Assignment
               </a>
             </div>
           )}
           {["assigned", "complete"].includes(project.status) && (
             <div style={{ marginTop: 10 }}>
-              <a className="btn btn-blue btn-sm" href={`#/project/${project.id}/brief`}>
+              <a className="btn btn-accent btn-sm" href={`#/project/${project.id}/brief`}>
                 View Handoff Brief
               </a>
             </div>
@@ -122,7 +122,7 @@ export default function PurgatoryGate({ projectId }) {
           </div>
 
           <div style={{ marginTop: 16 }}>
-            <button className="btn btn-blue" disabled={!ready || submitting} onClick={submit}>
+            <button className="btn btn-accent" disabled={!ready || submitting} onClick={submit}>
               {submitting ? "Creating project…" : "Submit — Create Project"}
             </button>
           </div>

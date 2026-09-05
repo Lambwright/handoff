@@ -82,7 +82,7 @@ function UsersTab() {
               <span className="field-help">This list mixes departed employees and non-person buckets — pick carefully.</span>
             </div>
           )}
-          <button className="btn btn-blue" disabled={saving} type="submit">
+          <button className="btn btn-accent" disabled={saving} type="submit">
             {saving ? "Saving…" : "Save"}
           </button>
         </form>
@@ -195,7 +195,7 @@ function AffinityTab() {
             <label>Note</label>
             <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
           </div>
-          <button className="btn btn-blue" disabled={saving} type="submit">
+          <button className="btn btn-accent" disabled={saving} type="submit">
             {saving ? "Saving…" : "Save"}
           </button>
         </form>

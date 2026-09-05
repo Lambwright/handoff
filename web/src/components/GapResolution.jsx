@@ -188,7 +188,7 @@ export default function GapResolution({ task, projectId, onChanged }) {
             <div className="row-secondary">
               Matched to <strong>{task.value.suggestion.match.name}</strong> ({Math.round(task.value.suggestion.match.score * 100)}% confident)
               <div className="checklist-item-actions">
-                <button className="btn btn-blue btn-sm" disabled={busy} onClick={() => complete({ directory_id: task.value.suggestion.match.directory_id, name: task.value.suggestion.match.name })}>
+                <button className="btn btn-accent btn-sm" disabled={busy} onClick={() => complete({ directory_id: task.value.suggestion.match.directory_id, name: task.value.suggestion.match.name })}>
                   Confirm match
                 </button>
               </div>
@@ -230,7 +230,7 @@ export default function GapResolution({ task, projectId, onChanged }) {
         <div className="checklist-item-body">
           <ValueInput task={task} draft={draft} setDraft={setDraft} />
           <div className="checklist-item-actions">
-            <button className="btn btn-blue btn-sm" disabled={busy} onClick={() => complete(draft ?? task.value)}>
+            <button className="btn btn-accent btn-sm" disabled={busy} onClick={() => complete(draft ?? task.value)}>
               {task.status === "pending" ? "Confirm" : "Save"}
             </button>
             {!showDefer && (
