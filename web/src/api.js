@@ -50,6 +50,7 @@ export const api = {
   listPmRoster: () => request("/pm-roster"),
 
   listBids: () => request("/bids"),
+  refreshBids: () => request("/bids/refresh", { method: "POST", body: {} }),
   openHandoff: (bidId) => request("/handoffs", { method: "POST", body: { bid_id: bidId } }),
 
   listProjects: (status) => request(`/projects${status ? `?status=${encodeURIComponent(status)}` : ""}`),

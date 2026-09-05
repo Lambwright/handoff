@@ -39,7 +39,7 @@ import { json, preflight } from "./http.js";
 import { sqlFor } from "./db.js";
 import { makeRouter } from "./router.js";
 import { getMe, listUsers, upsertUser, deactivateUser, listDepartments, procoreProbe } from "./admin.js";
-import { listAwardedBids, openHandoff } from "./bids.js";
+import { listAwardedBids, openHandoff, refreshBids } from "./bids.js";
 import { searchCustomerDirectory } from "./matching.js";
 import {
   getGate,
@@ -72,6 +72,7 @@ router.get("/departments", { roles: [] }, listDepartments);
 router.post("/admin/procore-probe", { roles: ["admin"] }, procoreProbe); // TEMPORARY — remove after procore-shapes.js is confirmed
 
 router.get("/bids", { roles: ["estimator", "assignment"] }, listAwardedBids);
+router.post("/bids/refresh", { roles: ["estimator", "assignment"] }, refreshBids);
 router.post("/handoffs", { roles: ["estimator"] }, openHandoff);
 
 router.get("/projects", { roles: [] }, listProjects);

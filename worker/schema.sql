@@ -14,6 +14,7 @@ create extension if not exists pgcrypto;
 -- into later without a migration.
 create extension if not exists vector;
 
+drop table if exists bid_cache cascade;
 drop table if exists startup_tasks cascade;
 drop table if exists notifications cascade;
 drop table if exists back_of_house_docs cascade;
@@ -218,3 +219,29 @@ create table notifications (
 );
 create index idx_notifications_project on notifications (project_id);
 create index idx_notifications_bid on notifications (source_bid_id);
+
+-- ---------------------------------------------------------------------------
+-- bid_cache — the "Awarded, not yet handed off" bids for the BidPicker screen.
+-- The Bid Board API (v2.0 estimating/bid_board_projects) supports only
+-- page/per_page — no server-side status/archived filter, no sort — so finding
+-- the ~20 relevant bids means scanning all ~4200+ records. Too slow to do on
+-- every estimator visit, so the 6h cron (and an on-demand refresh) scans and
+-- upserts here; GET /bids just reads this table.
+--
+-- "Awarded" is confirmed as: bid.status == 'COMPLETE' AND bid.archived == false
+-- (matches the "Awarded (230)" board column exactly). HANDOFF shows the subset
+-- with no project_id yet (the ~20 not already converted).
+-- ---------------------------------------------------------------------------
+create table bid_cache (
+  bid_id text primary key,               -- estimating bid_board_project id (string)
+  name text,
+  customer_name text,
+  customer_company_id text,              -- Procore Directory company id off the bid, when present
+  project_number text,
+  address jsonb,                         -- {street, city, state, zip, country} — often all null
+  estimate_total numeric,                -- bid.stats.total (rough; real Estimating summary is elsewhere)
+  estimator_user_id text,
+  snapshot jsonb not null,               -- the raw bid record
+  refreshed_at timestamptz not null default now()
+);
+create index idx_bid_cache_refreshed on bid_cache (refreshed_at);

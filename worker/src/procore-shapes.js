@@ -16,47 +16,62 @@
 // Bid Board
 // ---------------------------------------------------------------------------
 export const BID_BOARD = {
-  // Path CONFIRMED by probe 2026-09-05: this exact path returns 403 "User is
-  // not authorized" (NOT 404 — the no-company-prefix variant 404s), so the
-  // path shape is right and the only thing missing is the Procore app's
-  // Estimating/Bidding permission. See worker/README "Still to confirm".
-  // TODO(sandbox): once Estimating access is granted, confirm the record shape
-  // + the Awarded signal (isAwarded / toDraft below are still guesses).
+  // CONFIRMED by full probe sweep 2026-09-05 (4,255 bid records).
+  //
+  // The endpoint supports ONLY page + per_page — no server-side status /
+  // archived / sort filter (all silently ignored). So the "Awarded, not yet
+  // handed off" set is found by paging the whole board and filtering here.
+  // That's too slow for an interactive request, so bids.js caches the result
+  // in `bid_cache` (refreshed by the 6h cron + on demand) and GET /bids reads
+  // the cache. See scanAwardedBids() in bids.js.
+  //
+  // Response envelope: { "data": [ ...records... ] } — NOT a bare array.
+  // Records carry: id (string), name, description, status, archived,
+  // project_id (null until converted to a Portfolio project), project_number,
+  // customer_company {id, name}, address {street, city, state, zip, country}
+  // (frequently all null), stats.total, due_date (the BID due date — NOT a
+  // project timeline), estimator_user_id. No project_type, no start/end dates,
+  // no board-column field.
   listPath: (companyId) => `/companies/${companyId}/estimating/bid_board_projects`,
   version: "v2.0",
 
-  // TODO(sandbox): confirm which field/value marks a bid as being in the
-  // "Awarded" column. Could be `bid_status`, `status`, a `stage`/`column`
-  // object, or a boolean. Adjust this predicate only.
+  // The board's "Awarded" column = status COMPLETE and not archived (matches
+  // the column's count of 230 exactly). The board's other columns map to
+  // status too: Lost->LOST, Estimating Queue->ESTIMATING, Submitted->
+  // BID_SUBMITTED, Watch List->DELAYED, Active 30-60->ACCEPTED, Active 60-90+
+  // ->IN_PROGRESS, Archived->archived:true.
   isAwarded(bid) {
-    const s = (bid.bid_status || bid.status || bid.stage?.name || bid.column?.name || "")
-      .toString()
-      .toLowerCase();
-    return s.includes("award");
+    return bid.status === "COMPLETE" && bid.archived === false;
   },
 
-  // Map a raw bid record to the fields HANDOFF houses. Every read here is a
-  // structured field copy — NO document parsing (Ben: address/customer are just
-  // fields, keep parsing to a minimum).
-  // TODO(sandbox): confirm the real field names on the bid record.
+  // What GET /bids actually offers: Awarded AND not already turned into a
+  // Portfolio project (project_id null). ~20 of the 230 Awarded bids.
+  isReadyToHandOff(bid) {
+    return BID_BOARD.isAwarded(bid) && !bid.project_id;
+  },
+
+  // Structured field copy — NO document parsing (Ben). `project_type` and a
+  // real start/end timeline are NOT on the bid record, so they're left null
+  // for the estimator to set in the gate (checklist.js defaults type to
+  // Contract; `due_date` is deliberately not mapped — it's the bid deadline,
+  // not the project schedule).
   toDraft(bid) {
     return {
-      name: bid.name || bid.project_name || bid.title || null,
-      project_number: bid.project_number || bid.number || null,
-      project_type: bid.project_type?.name || bid.type || null, // normalized later by checklist.js
-      customer_name:
-        bid.client?.name || bid.customer?.name || bid.owner?.name || bid.company?.name || null,
+      name: bid.name || null,
+      project_number: bid.project_number || null,
+      project_type: null,
+      customer_name: bid.customer_company?.name || null,
+      customer_company_id: bid.customer_company?.id ? String(bid.customer_company.id) : null,
       address: {
-        street: bid.address || bid.street_address || bid.location?.address || null,
-        city: bid.city || bid.location?.city || null,
-        state_code: bid.state_code || bid.location?.state_code || bid.province || null,
-        postal_code: bid.zip || bid.postal_code || bid.location?.postal_code || null,
-        country_code: bid.country_code || bid.location?.country_code || "CA",
+        street: bid.address?.street || null,
+        city: bid.address?.city || null,
+        state_code: bid.address?.state || null, // bid uses `state`, project uses `state_code`
+        postal_code: bid.address?.zip || null,
+        country_code: bid.address?.country || "CA",
       },
-      timeline: {
-        start_date: bid.start_date || bid.estimated_start_date || null,
-        end_date: bid.completion_date || bid.estimated_completion_date || bid.end_date || null,
-      },
+      estimate_total: bid.stats?.total ?? null,
+      estimator_user_id: bid.estimator_user_id ? String(bid.estimator_user_id) : null,
+      timeline: { start_date: null, end_date: null },
     };
   },
 };

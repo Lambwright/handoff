@@ -4,9 +4,8 @@
 // describes (Teams -> email -> manager), transport STUBBED (see notify.js).
 
 import { sqlFor } from "./db.js";
-import { procoreFetch } from "./procore.js";
-import { BID_BOARD } from "./procore-shapes.js";
 import { writeNotification } from "./notify.js";
+import { refreshBidCache } from "./bids.js";
 import { batched } from "./util.js";
 
 const STALE_AFTER_HOURS = 24;
@@ -25,24 +24,26 @@ async function escalate(sql, key, { projectId = null, sourceBidId = null, subjec
 export async function runCronTick(env) {
   const sql = sqlFor(env);
 
-  // Awarded bids nobody has opened a handoff for yet.
+  // Rescan the Bid Board and refresh bid_cache (the "Awarded, not yet handed
+  // off" list GET /bids serves). Then nudge on any of those nobody has opened
+  // a handoff for.
   try {
-    const { ok, data } = await procoreFetch(env, BID_BOARD.listPath(env.PROCORE_COMPANY_ID), { version: BID_BOARD.version });
-    const awarded = ok ? (Array.isArray(data) ? data : data?.bid_board_projects || data?.projects || []).filter(BID_BOARD.isAwarded) : [];
-    const ids = awarded.map((b) => String(b.id));
+    await refreshBidCache(env, sql);
+    const cached = await sql`select bid_id, name from bid_cache`;
+    const ids = cached.map((r) => r.bid_id);
     const started = ids.length ? await sql`select source_bid_id from projects where source_bid_id = any(${ids})` : [];
     const startedIds = new Set(started.map((r) => r.source_bid_id));
-    const untouched = awarded.filter((b) => !startedIds.has(String(b.id)));
+    const untouched = cached.filter((r) => !startedIds.has(r.bid_id));
 
     await batched(untouched, (bid) =>
-      escalate(sql, `bid:${bid.id}`, {
-        sourceBidId: String(bid.id),
-        subject: `Awarded bid not yet handed off: ${bid.name || bid.id}`,
-        body: `This bid has been Awarded but no HANDOFF has been opened for it yet.`,
+      escalate(sql, `bid:${bid.bid_id}`, {
+        sourceBidId: bid.bid_id,
+        subject: `Awarded bid not yet handed off: ${bid.name || bid.bid_id}`,
+        body: `This bid is in the Awarded column but no HANDOFF has been opened for it yet.`,
       })
     );
   } catch (e) {
-    console.log("cron: bid staleness check failed:", e.message);
+    console.log("cron: bid cache refresh / staleness check failed:", e.message);
   }
 
   // Handoffs stuck mid-gate for more than STALE_AFTER_HOURS.
