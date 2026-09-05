@@ -41,18 +41,26 @@
 	// this account's real per-invocation subrequest ceiling is ~8, far under the
 	// documented number).
 	"triggers": {
-		"crons": ["0 */6 * * *"]
+		"crons": [
+			"0 */6 * * *"
+		]
 	},
 	// A Worker calling another Worker's *.workers.dev URL over plain fetch() gets
 	// blocked with Cloudflare error 1042 — the service binding is the supported way
 	// to reach auth-worker's /auth/verify. Same pattern as punch-worker / tally-worker.
 	"services": [
-		{ "binding": "AUTH_WORKER", "service": "auth" }
+		{
+			"binding": "AUTH_WORKER",
+			"service": "auth"
+		}
 	],
 	// Housed handoff documents (PO doc, tender correspondence) before they're
 	// pushed to Procore. NOT public — read back only through an authed route.
 	"r2_buckets": [
-		{ "binding": "DOCS", "bucket_name": "handoff-docs" }
+		{
+			"binding": "DOCS",
+			"bucket_name": "handoff-docs"
+		}
 	]
 	/**
 	 * Secrets (set with `wrangler secret put <NAME>`):
