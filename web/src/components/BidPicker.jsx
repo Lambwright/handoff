@@ -19,6 +19,7 @@ function timeAgo(iso) {
 export default function BidPicker() {
   const [bids, setBids] = useState([]);
   const [refreshedAt, setRefreshedAt] = useState(null);
+  const [scanInProgress, setScanInProgress] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [opening, setOpening] = useState(null);
@@ -30,6 +31,8 @@ export default function BidPicker() {
       .then((data) => {
         setBids(data.bids || []);
         setRefreshedAt(data.cache_refreshed_at || null);
+        setScanInProgress(Boolean(data.scan_in_progress));
+        return data;
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -39,15 +42,21 @@ export default function BidPicker() {
     load();
   }, []);
 
+  // The Bid Board scan is incremental — one /bids/refresh advances ~12 pages.
+  // Drive it to completion: kick a chunk, poll until it lands, repeat while a
+  // scan is still in progress (guarded so it can't loop forever).
   async function refresh() {
     setRefreshing(true);
     setError(null);
     try {
-      await api.refreshBids();
-      // The scan runs in the background (~30s). Poll the list a few times.
-      for (let i = 0; i < 8; i++) {
-        await new Promise((r) => setTimeout(r, 6000));
-        await load();
+      for (let round = 0; round < 8; round++) {
+        await api.refreshBids();
+        let data;
+        for (let i = 0; i < 6; i++) {
+          await new Promise((r) => setTimeout(r, 4000));
+          data = await load();
+        }
+        if (!data?.scan_in_progress) break;
       }
     } catch (e) {
       setError(e.message);
@@ -80,7 +89,9 @@ export default function BidPicker() {
           Awarded Bids — ready to hand off
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <span className="row-secondary">synced {timeAgo(refreshedAt)}</span>
+          <span className="row-secondary">
+            {scanInProgress ? "scan in progress…" : `full sync ${timeAgo(refreshedAt)}`}
+          </span>
           <button className="btn btn-ghost btn-sm" onClick={refresh} disabled={refreshing}>
             {refreshing ? "Scanning Bid Board…" : "Refresh"}
           </button>

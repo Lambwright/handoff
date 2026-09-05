@@ -3,77 +3,93 @@
 // created in Procore here — see create.js.
 //
 // The Bid Board API only supports page/per_page (no filter/sort), and there are
-// ~4,200 bid records, so scanning it on every estimator visit is a non-starter.
-// Instead: scanAwardedBids() pages the whole board and filters to the ~20
-// Awarded-not-yet-handed-off bids; refreshBidCache() persists that into
-// `bid_cache`; GET /bids reads the cache. The 6h cron refreshes it, and
-// POST /bids/refresh forces it on demand.
+// ~4,200 bid records — a full pass exceeds a Worker's waitUntil budget. So the
+// scan is incremental + resumable (see refreshBidCache): each cron tick does a
+// full pass, and POST /bids/refresh advances it a bounded chunk at a time.
+// GET /bids just reads `bid_cache`.
 
 import { json } from "./http.js";
 import { procoreFetch } from "./procore.js";
 import { BID_BOARD } from "./procore-shapes.js";
 import { normalizeType, buildGateTasks } from "./checklist.js";
 import { suggestCustomerMatch } from "./matching.js";
-import { batched } from "./util.js";
 
 const BID_SCAN_MAX_PAGES = 80; // ~4,200 records at ~80/page — generous headroom
+const BID_SCAN_PER_PAGE = 100;
+// A fresh full pass restarts if the in-progress one hasn't advanced in this long
+// (a scan that died mid-way shouldn't wedge the state forever).
+const SCAN_RESUME_STALE_MIN = 20;
 
-// Pages the entire Bid Board and returns the raw records that are Awarded and
-// not yet converted to a project. Bounded by BID_SCAN_MAX_PAGES.
-export async function scanAwardedBids(env) {
+async function upsertBidRow(sql, bid, runId) {
+  const d = BID_BOARD.toDraft(bid);
+  await sql`
+    insert into bid_cache (bid_id, name, customer_name, customer_company_id, project_number,
+                           address, estimate_total, estimator_user_id, snapshot, run_id, refreshed_at)
+    values (${String(bid.id)}, ${d.name}, ${d.customer_name}, ${d.customer_company_id}, ${d.project_number},
+            ${JSON.stringify(d.address)}::jsonb, ${d.estimate_total}, ${d.estimator_user_id},
+            ${JSON.stringify(bid)}::jsonb, ${runId}, now())
+    on conflict (bid_id) do update set
+      name = excluded.name, customer_name = excluded.customer_name,
+      customer_company_id = excluded.customer_company_id, project_number = excluded.project_number,
+      address = excluded.address, estimate_total = excluded.estimate_total,
+      estimator_user_id = excluded.estimator_user_id, snapshot = excluded.snapshot,
+      run_id = excluded.run_id, refreshed_at = excluded.refreshed_at`;
+}
+
+// Advances the incremental Bid Board scan by up to `maxPages` pages, upserting
+// each page's Awarded-not-handed-off bids as it goes. A full pass:
+//   - starts a new run_id (fresh, or the previous run went stale)
+//   - pages from last_page+1, persisting state after every page (so a
+//     waitUntil cancellation just means the next call resumes)
+//   - on reaching the end, prunes every bid_cache row not stamped with this
+//     run_id and records full_pass_completed_at
+// Returns { pagesScanned, complete }.
+export async function refreshBidCache(env, sql, { maxPages = BID_SCAN_MAX_PAGES } = {}) {
+  const [state] = await sql`select * from bid_scan_state where singleton = 1`;
+  const staleCutoffMs = SCAN_RESUME_STALE_MIN * 60 * 1000;
+  const inProgress =
+    state?.run_id && state.last_page > 0 && Date.now() - new Date(state.updated_at).getTime() < staleCutoffMs;
+
+  let runId = inProgress ? state.run_id : crypto.randomUUID();
+  let startPage = inProgress ? state.last_page + 1 : 1;
+  if (!inProgress) {
+    await sql`update bid_scan_state set run_id = ${runId}, last_page = 0, updated_at = now() where singleton = 1`;
+  }
+
   const path = BID_BOARD.listPath(env.PROCORE_COMPANY_ID);
-  const ready = [];
-  for (let page = 1; page <= BID_SCAN_MAX_PAGES; page++) {
+  let page = startPage;
+  let complete = false;
+  for (let i = 0; i < maxPages && page <= BID_SCAN_MAX_PAGES; i++, page++) {
     const { ok, status, data } = await procoreFetch(env, path, {
       version: BID_BOARD.version,
-      query: { per_page: 100, page },
+      query: { per_page: BID_SCAN_PER_PAGE, page },
     });
     if (!ok) throw new Error(`Bid Board page ${page} failed: HTTP ${status} ${JSON.stringify(data).slice(0, 200)}`);
     const rows = data?.data || (Array.isArray(data) ? data : []);
-    if (rows.length === 0) break;
-    for (const b of rows) if (BID_BOARD.isReadyToHandOff(b)) ready.push(b);
+
+    for (const b of rows) if (BID_BOARD.isReadyToHandOff(b)) await upsertBidRow(sql, b, runId);
+    await sql`update bid_scan_state set last_page = ${page}, updated_at = now() where singleton = 1`;
+
+    if (rows.length < BID_SCAN_PER_PAGE) {
+      complete = true;
+      break;
+    }
   }
-  return ready;
-}
+  if (page > BID_SCAN_MAX_PAGES) complete = true;
 
-// Full-scan + upsert into bid_cache, pruning bids that dropped out of the set.
-export async function refreshBidCache(env, sql) {
-  const bids = await scanAwardedBids(env);
-  const seen = bids.map((b) => String(b.id));
-
-  await batched(bids, (b) => {
-    const d = BID_BOARD.toDraft(b);
-    return sql`
-      insert into bid_cache (bid_id, name, customer_name, customer_company_id, project_number,
-                             address, estimate_total, estimator_user_id, snapshot, refreshed_at)
-      values (${String(b.id)}, ${d.name}, ${d.customer_name}, ${d.customer_company_id}, ${d.project_number},
-              ${JSON.stringify(d.address)}::jsonb, ${d.estimate_total}, ${d.estimator_user_id},
-              ${JSON.stringify(b)}::jsonb, now())
-      on conflict (bid_id) do update set
-        name = excluded.name, customer_name = excluded.customer_name,
-        customer_company_id = excluded.customer_company_id, project_number = excluded.project_number,
-        address = excluded.address, estimate_total = excluded.estimate_total,
-        estimator_user_id = excluded.estimator_user_id, snapshot = excluded.snapshot,
-        refreshed_at = excluded.refreshed_at`;
-  });
-
-  if (seen.length) {
-    await sql`delete from bid_cache where bid_id <> all(${seen})`;
-  } else {
-    await sql`delete from bid_cache`;
+  if (complete) {
+    await sql`delete from bid_cache where run_id is distinct from ${runId}`;
+    await sql`update bid_scan_state set last_page = 0, full_pass_completed_at = now(), updated_at = now() where singleton = 1`;
   }
-  return seen.length;
+  return { pagesScanned: page - startPage, complete };
 }
 
 // GET /bids — the cached Awarded-not-handed-off bids, annotated with any handoff
 // already opened against them (so the picker offers "resume", not a duplicate).
-// ?refresh=1 forces a fresh scan first (accepts the ~10-30s wait).
-export async function listAwardedBids({ url, env, sql }) {
-  if (url.searchParams.get("refresh") === "1") {
-    await refreshBidCache(env, sql);
-  }
+export async function listAwardedBids({ env, sql }) {
+  const cached = await sql`select * from bid_cache order by name`;
+  const [state] = await sql`select full_pass_completed_at, last_page, updated_at from bid_scan_state where singleton = 1`;
 
-  const cached = await sql`select * from bid_cache order by refreshed_at desc, name`;
   const ids = cached.map((r) => r.bid_id);
   const existing = ids.length
     ? await sql`select source_bid_id, id as project_id, status from projects where source_bid_id = any(${ids})`
@@ -95,18 +111,21 @@ export async function listAwardedBids({ url, env, sql }) {
     };
   });
 
-  const [{ refreshed_at } = {}] = cached.length
-    ? [cached.reduce((a, b) => (a.refreshed_at > b.refreshed_at ? a : b))]
-    : [];
-  return json({ bids, cache_refreshed_at: refreshed_at || null });
+  return json({
+    bids,
+    cache_refreshed_at: state?.full_pass_completed_at || null,
+    scan_in_progress: Boolean(state?.last_page && state.last_page > 0),
+  });
 }
 
-// POST /bids/refresh — force a Bid Board rescan. The scan pages the whole board
-// (~40+ sequential GETs, ~30-60s), which would blow a normal request's
-// wall-clock budget, so it runs in the background via waitUntil and the caller
-// re-fetches GET /bids once it's had time to land.
+// POST /bids/refresh — advance the incremental Bid Board scan by a bounded chunk
+// (small enough to finish inside a waitUntil budget, ~12 pages). Repeated calls
+// resume and eventually complete a full pass; the 6h cron completes one on its
+// own. Returns immediately; the caller re-polls GET /bids.
 export async function refreshBids({ env, sql, executionCtx }) {
-  executionCtx.waitUntil(refreshBidCache(env, sql).catch((e) => console.log("bid cache refresh failed:", e.message)));
+  executionCtx.waitUntil(
+    refreshBidCache(env, sql, { maxPages: 12 }).catch((e) => console.log("bid cache refresh chunk failed:", e.message))
+  );
   return json({ ok: true, started: true });
 }
 

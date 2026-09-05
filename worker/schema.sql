@@ -242,6 +242,20 @@ create table bid_cache (
   estimate_total numeric,                -- bid.stats.total (rough; real Estimating summary is elsewhere)
   estimator_user_id text,
   snapshot jsonb not null,               -- the raw bid record
+  run_id text,                           -- which scan pass last touched this row (for pruning)
   refreshed_at timestamptz not null default now()
 );
 create index idx_bid_cache_refreshed on bid_cache (refreshed_at);
+
+-- The Bid Board scan is incremental + resumable: a full pass is ~43 pages and
+-- exceeds a Worker's waitUntil budget, so each cron tick / manual refresh
+-- advances the scan by a bounded number of pages, upserting as it goes, and
+-- prunes stale rows only once a full pass finishes. Single-row table.
+create table bid_scan_state (
+  singleton integer primary key default 1 check (singleton = 1),
+  run_id text,
+  last_page integer not null default 0,
+  full_pass_completed_at timestamptz,
+  updated_at timestamptz not null default now()
+);
+insert into bid_scan_state (singleton) values (1) on conflict (singleton) do nothing;

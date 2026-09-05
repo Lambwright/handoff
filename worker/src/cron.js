@@ -25,10 +25,15 @@ export async function runCronTick(env) {
   const sql = sqlFor(env);
 
   // Rescan the Bid Board and refresh bid_cache (the "Awarded, not yet handed
-  // off" list GET /bids serves). Then nudge on any of those nobody has opened
-  // a handoff for.
+  // off" list GET /bids serves). The scan is incremental — loop it in bounded
+  // chunks until a full pass completes (or a generous guard trips), so a
+  // scheduled invocation cut short still makes steady progress and the next
+  // tick resumes. Then nudge on any cached bid nobody has opened a handoff for.
   try {
-    await refreshBidCache(env, sql);
+    for (let i = 0; i < 12; i++) {
+      const { complete } = await refreshBidCache(env, sql, { maxPages: 12 });
+      if (complete) break;
+    }
     const cached = await sql`select bid_id, name from bid_cache`;
     const ids = cached.map((r) => r.bid_id);
     const started = ids.length ? await sql`select source_bid_id from projects where source_bid_id = any(${ids})` : [];
