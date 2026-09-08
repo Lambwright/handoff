@@ -30,8 +30,11 @@ export function getShellContext() {
   const embed = get("embed") === "1" || get("mode") === "embed";
 
   // Procore's numeric project id (project-level embed). Named `project_id` in
-  // Procore's context tokens.
-  const procoreProjectId = get("project_id") || get("procore_project_id") || null;
+  // Procore's context tokens. Guard against an un-substituted `{project_id}`
+  // placeholder (Procore leaves it literal at company level where there's no
+  // project) and any non-numeric junk.
+  const rawProjectId = get("project_id") || get("procore_project_id") || "";
+  const procoreProjectId = /^\d+$/.test(rawProjectId) ? rawProjectId : null;
 
   // The estimating bid_board_projects record id (sidebar / bid-contextual
   // launch). Exact Procore variable name TBD — accept the likely ones.
@@ -40,7 +43,7 @@ export function getShellContext() {
   return {
     sidebar,
     embed,
-    procoreProjectId: procoreProjectId ? String(procoreProjectId) : null,
-    bidId: bidId ? String(bidId) : null,
+    procoreProjectId,
+    bidId: bidId && !/[{}]/.test(bidId) ? String(bidId) : null,
   };
 }
