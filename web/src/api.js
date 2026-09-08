@@ -54,6 +54,8 @@ export const api = {
   openHandoff: (bidId) => request("/handoffs", { method: "POST", body: { bid_id: bidId } }),
 
   listProjects: (status) => request(`/projects${status ? `?status=${encodeURIComponent(status)}` : ""}`),
+  getHandoffByProcoreId: (procoreId) => request(`/projects/by-procore/${encodeURIComponent(procoreId)}`),
+  getProjectSummary: (projectId) => request(`/projects/${projectId}/summary`),
   getGate: (projectId) => request(`/projects/${projectId}/gate`),
   patchGateTask: (taskId, fields) => request(`/gate-tasks/${taskId}`, { method: "PATCH", body: fields }),
   verifyGateTask: (taskId) => request(`/gate-tasks/${taskId}/verify`, { method: "POST", body: {} }),

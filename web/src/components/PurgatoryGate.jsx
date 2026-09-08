@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api.js";
 import GapResolution from "./GapResolution.jsx";
-import { getSidebarContext } from "../sidebar.js";
+import { getShellContext } from "../shell.js";
 
 // In the Procore side panel, the assignment / brief steps (assignment team's
 // job, wide Recharts UI) open in the full view rather than trying to fit the
 // panel. Elsewhere they're same-tab hash links.
-const IN_SIDEBAR = getSidebarContext().sidebar;
+const IN_SIDEBAR = getShellContext().sidebar;
 const fullBase = `${window.location.origin}${window.location.pathname}`;
 function stageLink(hash) {
   return IN_SIDEBAR ? { href: `${fullBase}${hash}`, target: "_blank", rel: "noreferrer" } : { href: hash };

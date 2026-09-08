@@ -57,7 +57,7 @@ import {
 import { getBrief } from "./brief.js";
 import { listAffinity, upsertAffinity } from "./affinity.js";
 import { listNotifications } from "./notify.js";
-import { listProjects } from "./projects.js";
+import { listProjects, getProjectByProcore, getProjectSummary } from "./projects.js";
 import { runCronTick } from "./cron.js";
 
 const router = makeRouter();
@@ -76,6 +76,8 @@ router.post("/bids/refresh", { roles: ["estimator", "assignment"] }, refreshBids
 router.post("/handoffs", { roles: ["estimator"] }, openHandoff);
 
 router.get("/projects", { roles: [] }, listProjects);
+router.get("/projects/by-procore/:procoreId", { roles: [] }, getProjectByProcore);
+router.get("/projects/:id/summary", { roles: [] }, getProjectSummary);
 router.get("/customer-search", { roles: [] }, searchCustomerDirectory);
 router.get("/projects/:id/gate", { roles: [] }, getGate);
 router.patch("/gate-tasks/:id", { roles: [] }, patchGateTask);

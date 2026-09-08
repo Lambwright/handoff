@@ -10,9 +10,10 @@ import Assignment from "./components/Assignment.jsx";
 import HandoffBrief from "./components/HandoffBrief.jsx";
 import Admin from "./components/Admin.jsx";
 import SidebarApp from "./components/SidebarApp.jsx";
-import { getSidebarContext } from "./sidebar.js";
+import ProjectView from "./components/ProjectView.jsx";
+import { getShellContext } from "./shell.js";
 
-const SIDEBAR = getSidebarContext();
+const SHELL = getShellContext();
 
 function parseHash(hash) {
   const h = hash.replace(/^#/, "") || "/";
@@ -49,8 +50,6 @@ export default function App() {
         return;
       }
       setUser(data.user);
-      // /me resolves the HANDOFF-side role (or null if none assigned yet) —
-      // separate from Einbau ID validity, which /auth/verify already confirmed.
       api
         .me()
         .then((meData) => {
@@ -78,7 +77,9 @@ export default function App() {
     setAuthState("out");
   }
 
-  const wrap = (node) => (SIDEBAR.sidebar ? <div className="sidebar-mode">{node}</div> : node);
+  // Every shell wraps its content so the compact/full-embed CSS can scope off it.
+  const shellClass = SHELL.sidebar ? "sidebar-mode" : SHELL.embed ? "embed-mode" : null;
+  const wrap = (node) => (shellClass ? <div className={shellClass}>{node}</div> : node);
 
   if (authState === "checking") {
     return wrap(
@@ -101,11 +102,14 @@ export default function App() {
         </p>
       </div>
     );
-    return SIDEBAR.sidebar ? (
-      <div className="sidebar-mode">
-        <div className="sidebar-body">{msg}</div>
-      </div>
-    ) : (
+    if (shellClass) {
+      return (
+        <div className={shellClass}>
+          <div className={SHELL.sidebar ? "sidebar-body" : "container"}>{msg}</div>
+        </div>
+      );
+    }
+    return (
       <>
         <Header user={user} actor={null} currentHash="" onLogout={handleLogout} />
         <div className="container">{msg}</div>
@@ -113,17 +117,32 @@ export default function App() {
     );
   }
 
-  if (SIDEBAR.sidebar) {
+  // Procore Side Panel (compact, bid-contextual).
+  if (SHELL.sidebar) {
     return (
       <div className="sidebar-mode">
-        <SidebarApp bidId={SIDEBAR.bidId} user={user} actor={actor} onLogout={handleLogout} />
+        <SidebarApp bidId={SHELL.bidId} user={user} actor={actor} onLogout={handleLogout} />
       </div>
     );
   }
 
+  // Procore project-level Full Screen tool — the PM read view for one Procore project.
+  if (SHELL.embed && SHELL.procoreProjectId) {
+    return (
+      <div className="embed-mode">
+        <Header user={user} actor={actor} currentHash="" onLogout={handleLogout} embed minimal />
+        <div className="container">
+          <ProjectView procoreProjectId={SHELL.procoreProjectId} />
+        </div>
+      </div>
+    );
+  }
+
+  // Standalone webpage, or the company-level Full Screen tool (same layout; the
+  // `embed` flag just drops the cross-app switcher since Procore owns the chrome).
   return (
-    <>
-      <Header user={user} actor={actor} currentHash={window.location.hash || "#/"} onLogout={handleLogout} />
+    <div className={SHELL.embed ? "embed-mode" : undefined}>
+      <Header user={user} actor={actor} currentHash={window.location.hash || "#/"} onLogout={handleLogout} embed={SHELL.embed} />
       <div className="container">
         {route.view === "dashboard" && <Dashboard actor={actor} />}
         {route.view === "bids" && <BidPicker />}
@@ -132,6 +151,6 @@ export default function App() {
         {route.view === "brief" && <HandoffBrief projectId={route.id} />}
         {route.view === "admin" && <Admin actor={actor} />}
       </div>
-    </>
+    </div>
   );
 }

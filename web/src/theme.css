@@ -346,6 +346,13 @@ body {
 }
 .sidebar-body { padding: 12px; flex: 1; overflow-y: auto; }
 
+/* --- Full Screen embedded tool (Procore chrome around it) --- */
+.embed-mode .header {
+  position: static; padding: 14px 16px 10px;
+}
+.embed-mode .header-badge-name { font-size: 24px; }
+.embed-mode .container { padding-top: 16px; }
+
 /* Compact overrides — apply only inside the panel. */
 .sidebar-mode .card { padding: 12px; margin-bottom: 8px; }
 .sidebar-mode h2 { font-size: 17px !important; }

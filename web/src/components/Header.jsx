@@ -17,7 +17,10 @@ const NAV = [
   { hash: "#/bids", label: "Start a Handoff", roles: ["estimator", "admin"] },
 ];
 
-export default function Header({ user, actor, currentHash, onLogout }) {
+// `embed` (Procore Full Screen tool): drop the cross-app switcher — Procore
+// owns the chrome and jumping to PUNCH/SCOUT/etc from inside it makes no sense.
+// `minimal` (project-level tool): also drop the nav — it's a single scoped view.
+export default function Header({ user, actor, currentHash, onLogout, embed = false, minimal = false }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -40,17 +43,18 @@ export default function Header({ user, actor, currentHash, onLogout }) {
         <div className="header-badge app-switcher" ref={ref}>
           <span
             className="header-badge-name"
-            style={{ cursor: "pointer" }}
+            style={{ cursor: embed ? "default" : "pointer" }}
             onClick={(e) => {
+              if (embed) return;
               e.stopPropagation();
               setOpen((v) => !v);
             }}
           >
-            HANDOFF<span className="app-switcher-caret">▾</span>
+            HANDOFF{!embed && <span className="app-switcher-caret">▾</span>}
           </span>
           <span className="header-badge-sub">Bid Board → Portfolio Handoff</span>
-          <span className="header-brand-tag">An Einbau Product</span>
-          {open && (
+          {!embed && <span className="header-brand-tag">An Einbau Product</span>}
+          {open && !embed && (
             <div className="app-switcher-menu">
               {appLinks().map((app) => (
                 <a className={`app-switcher-item${app.current ? " current" : ""}`} href={app.url} key={app.name}>
@@ -60,7 +64,7 @@ export default function Header({ user, actor, currentHash, onLogout }) {
             </div>
           )}
         </div>
-        {actor && (
+        {actor && !minimal && (
           <nav className="header-nav">
             {NAV.filter((n) => !n.roles || n.roles.includes(role)).map((n) => (
               <a key={n.hash} className={currentHash.startsWith(n.hash) && (n.hash !== "#/" || currentHash === "#/") ? "current" : ""} href={n.hash}>
