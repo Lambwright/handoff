@@ -325,3 +325,41 @@ body {
 .brief-section { margin-bottom: 14px; }
 .brief-section-title { font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); margin-bottom: 4px; }
 .brief-section-body { font-size: 13px; line-height: 1.5; color: var(--text-primary); white-space: pre-wrap; }
+
+/* --- Sidebar mode (Procore Side Panel embedded component) --- */
+.sidebar-mode { min-height: 100vh; }
+.sidebar-shell { display: flex; flex-direction: column; min-height: 100vh; }
+.sidebar-topbar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 12px; border-bottom: 1px solid var(--border-color);
+  position: sticky; top: 0; background: var(--bg-page); z-index: 10;
+}
+.sidebar-wordmark {
+  font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 16px;
+  letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-primary);
+}
+.sidebar-user { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-secondary); }
+.sidebar-link {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent);
+  text-decoration: none; margin-left: auto;
+}
+.sidebar-body { padding: 12px; flex: 1; overflow-y: auto; }
+
+/* Compact overrides — apply only inside the panel. */
+.sidebar-mode .card { padding: 12px; margin-bottom: 8px; }
+.sidebar-mode h2 { font-size: 17px !important; }
+.sidebar-mode .kv-grid { grid-template-columns: 1fr; }
+.sidebar-mode .checklist { gap: 8px; }
+.sidebar-mode .checklist-item { padding: 10px 12px; }
+.sidebar-mode .checklist-item-actions { gap: 6px; }
+.sidebar-mode .checklist-item-actions input { flex: 1 1 100%; }
+.sidebar-mode .row-list { gap: 6px; }
+.sidebar-mode .row-item {
+  grid-template-columns: 1fr !important; gap: 3px; padding: 10px 12px; align-items: flex-start;
+}
+.sidebar-mode .row-item .row-amount { text-align: left; }
+.sidebar-mode .row-item .btn { width: 100%; justify-content: center; margin-top: 4px; }
+.sidebar-mode .tabs { gap: 6px; }
+.sidebar-mode .login-screen { min-height: 60vh; }
+.sidebar-mode .btn-accent { width: 100%; justify-content: center; }

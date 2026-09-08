@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api.js";
 import GapResolution from "./GapResolution.jsx";
+import { getSidebarContext } from "../sidebar.js";
+
+// In the Procore side panel, the assignment / brief steps (assignment team's
+// job, wide Recharts UI) open in the full view rather than trying to fit the
+// panel. Elsewhere they're same-tab hash links.
+const IN_SIDEBAR = getSidebarContext().sidebar;
+const fullBase = `${window.location.origin}${window.location.pathname}`;
+function stageLink(hash) {
+  return IN_SIDEBAR ? { href: `${fullBase}${hash}`, target: "_blank", rel: "noreferrer" } : { href: hash };
+}
 
 // The Purgatory gate: every required task filled or deferred before HANDOFF will
 // create anything in Procore. "No project yet" is the lock — there is nothing
@@ -78,15 +88,15 @@ export default function PurgatoryGate({ projectId }) {
           This handoff has already been submitted — Procore project #{project.procore_project_id || "?"} was created.
           {project.status === "assigning" && (
             <div style={{ marginTop: 10 }}>
-              <a className="btn btn-accent btn-sm" href={`#/project/${project.id}/assignment`}>
-                Go to PM Assignment
+              <a className="btn btn-accent btn-sm" {...stageLink(`#/project/${project.id}/assignment`)}>
+                Go to PM Assignment{IN_SIDEBAR ? " ↗" : ""}
               </a>
             </div>
           )}
           {["assigned", "complete"].includes(project.status) && (
             <div style={{ marginTop: 10 }}>
-              <a className="btn btn-accent btn-sm" href={`#/project/${project.id}/brief`}>
-                View Handoff Brief
+              <a className="btn btn-accent btn-sm" {...stageLink(`#/project/${project.id}/brief`)}>
+                View Handoff Brief{IN_SIDEBAR ? " ↗" : ""}
               </a>
             </div>
           )}

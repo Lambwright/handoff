@@ -9,6 +9,10 @@ import PurgatoryGate from "./components/PurgatoryGate.jsx";
 import Assignment from "./components/Assignment.jsx";
 import HandoffBrief from "./components/HandoffBrief.jsx";
 import Admin from "./components/Admin.jsx";
+import SidebarApp from "./components/SidebarApp.jsx";
+import { getSidebarContext } from "./sidebar.js";
+
+const SIDEBAR = getSidebarContext();
 
 function parseHash(hash) {
   const h = hash.replace(/^#/, "") || "/";
@@ -74,31 +78,46 @@ export default function App() {
     setAuthState("out");
   }
 
+  const wrap = (node) => (SIDEBAR.sidebar ? <div className="sidebar-mode">{node}</div> : node);
+
   if (authState === "checking") {
-    return (
+    return wrap(
       <div className="login-screen">
         <span className="spinner-inline">Checking session…</span>
       </div>
     );
   }
   if (authState === "out") {
-    return <LoginScreen onLoggedIn={handleLoggedIn} />;
+    return wrap(<LoginScreen onLoggedIn={handleLoggedIn} />);
   }
 
   if (!actor) {
-    return (
+    const msg = (
+      <div className="card">
+        <div className="card-title">No HANDOFF role yet</div>
+        <p>
+          You're logged in as <strong>{user.displayName || user.username}</strong>, but an admin hasn't given you a HANDOFF role
+          (estimator / assignment / pm / admin) yet. Ask an admin to add you in Admin → Users.
+        </p>
+      </div>
+    );
+    return SIDEBAR.sidebar ? (
+      <div className="sidebar-mode">
+        <div className="sidebar-body">{msg}</div>
+      </div>
+    ) : (
       <>
         <Header user={user} actor={null} currentHash="" onLogout={handleLogout} />
-        <div className="container">
-          <div className="card">
-            <div className="card-title">No HANDOFF role yet</div>
-            <p>
-              You're logged in as <strong>{user.displayName || user.username}</strong>, but an admin hasn't given you a HANDOFF role
-              (estimator / assignment / pm / admin) yet. Ask an admin to add you in Admin → Users.
-            </p>
-          </div>
-        </div>
+        <div className="container">{msg}</div>
       </>
+    );
+  }
+
+  if (SIDEBAR.sidebar) {
+    return (
+      <div className="sidebar-mode">
+        <SidebarApp bidId={SIDEBAR.bidId} user={user} actor={actor} onLogout={handleLogout} />
+      </div>
     );
   }
 
