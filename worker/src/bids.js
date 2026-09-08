@@ -14,7 +14,10 @@ import { BID_BOARD } from "./procore-shapes.js";
 import { normalizeType, buildGateTasks } from "./checklist.js";
 import { suggestCustomerMatch } from "./matching.js";
 
-const BID_SCAN_MAX_PAGES = 80; // ~4,200 records at ~80/page — generous headroom
+const BID_SCAN_MAX_PAGES = 120; // ~4,200 records at ~60-85/page ≈ 60-70 pages; headroom for growth
+// The endpoint IGNORES per_page and returns its own page size (~60-85 rows), so
+// "did I get a full page?" can't be judged by row count — the scan pages until
+// it hits a genuinely empty page. per_page is still sent as a hint.
 const BID_SCAN_PER_PAGE = 100;
 // A fresh full pass restarts if the in-progress one hasn't advanced in this long
 // (a scan that died mid-way shouldn't wedge the state forever).
@@ -67,13 +70,13 @@ export async function refreshBidCache(env, sql, { maxPages = BID_SCAN_MAX_PAGES 
     if (!ok) throw new Error(`Bid Board page ${page} failed: HTTP ${status} ${JSON.stringify(data).slice(0, 200)}`);
     const rows = data?.data || (Array.isArray(data) ? data : []);
 
-    for (const b of rows) if (BID_BOARD.isReadyToHandOff(b)) await upsertBidRow(sql, b, runId);
-    await sql`update bid_scan_state set last_page = ${page}, updated_at = now() where singleton = 1`;
-
-    if (rows.length < BID_SCAN_PER_PAGE) {
+    if (rows.length === 0) {
       complete = true;
       break;
     }
+
+    for (const b of rows) if (BID_BOARD.isReadyToHandOff(b)) await upsertBidRow(sql, b, runId);
+    await sql`update bid_scan_state set last_page = ${page}, updated_at = now() where singleton = 1`;
   }
   if (page > BID_SCAN_MAX_PAGES) complete = true;
 
