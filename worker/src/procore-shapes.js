@@ -302,6 +302,12 @@ export const PROJECT = {
   extractStage(project) {
     return project.project_stage?.name || project.stage || null;
   },
+  // The project's Emails-tool inbound address — estimators forward tender
+  // correspondence here. Seen on the single-project GET as `inbound_email` /
+  // `inbound_email_address`.
+  extractInboundEmail(project) {
+    return project?.inbound_email_address || project?.inbound_email || null;
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -362,7 +368,9 @@ export const DOCUMENTS = {
 };
 
 // ---------------------------------------------------------------------------
-// Email / Correspondence (tender correspondence push + verify)
+// Email / Correspondence — VERIFY ONLY. HANDOFF does not push tender emails
+// into Procore (Ben, 2026-09-08): the estimator forwards them to the project's
+// inbound address after creation, and HANDOFF just confirms they arrived.
 // ---------------------------------------------------------------------------
 export const EMAIL_TOOL = {
   // Proven live in punch-worker (note the SINGULAR "project" in the path, and
@@ -370,9 +378,6 @@ export const EMAIL_TOOL = {
   listPath: (projectId) =>
     `/project/${projectId}/email_communications/emails?topic_type=project&topic_id=${projectId}`,
   version: "v1.0",
-  // TODO(sandbox): confirm the create endpoint for pushing a stored email /
-  // correspondence item onto the project.
-  createPath: (projectId) => `/project/${projectId}/email_communications/emails`,
 
   countFromList(data) {
     return Array.isArray(data?.emails) ? data.emails.length : 0;

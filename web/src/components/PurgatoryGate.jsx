@@ -65,10 +65,16 @@ export default function PurgatoryGate({ projectId }) {
   if (error && !project) return <div className="card" style={{ color: "var(--red)" }}>{error}</div>;
   if (!project) return null;
 
-  const required = tasks.filter((t) => t.required);
-  const done = required.filter((t) => ["complete", "deferred"].includes(t.status));
-  const ready = done.length === required.length;
+  // Mirror of checklist.js: post_creation items (tender emails) don't block the
+  // submit that creates the project — they're done in Procore afterward.
+  const POST_CREATION = new Set(["tender_correspondence"]);
+  const blocking = tasks.filter((t) => t.required && !POST_CREATION.has(t.task_type));
+  const done = blocking.filter((t) => ["complete", "deferred"].includes(t.status));
+  const ready = done.length === blocking.length;
   const alreadyCreated = project.status !== "gate";
+  const postTasks = tasks.filter(
+    (t) => POST_CREATION.has(t.task_type) || ["deferred", "verify_failed"].includes(t.status)
+  );
 
   return (
     <div>
@@ -103,10 +109,23 @@ export default function PurgatoryGate({ projectId }) {
         </div>
       )}
 
+      {alreadyCreated && postTasks.length > 0 && (
+        <div>
+          <div className="card-title" style={{ marginTop: 12 }}>
+            Still to do in Procore
+          </div>
+          <div className="checklist">
+            {postTasks.map((task) => (
+              <GapResolution key={task.id} task={task} projectId={projectId} project={project} onChanged={load} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {!alreadyCreated && (
         <>
           <div className="checklist-progress">
-            {done.length} of {required.length} required items resolved
+            {done.length} of {blocking.length} items to resolve before submitting
           </div>
           {error && <div className="card" style={{ color: "var(--red)" }}>{error}</div>}
           {submitResult?.error === "gate_incomplete" && (
@@ -127,7 +146,7 @@ export default function PurgatoryGate({ projectId }) {
 
           <div className="checklist">
             {tasks.map((task) => (
-              <GapResolution key={task.id} task={task} projectId={projectId} onChanged={load} />
+              <GapResolution key={task.id} task={task} projectId={projectId} project={project} onChanged={load} />
             ))}
           </div>
 

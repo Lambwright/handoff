@@ -17,10 +17,14 @@ export const ESTIMATE_PROJECT_TYPES = ["Contract", "Service Call"];
 const ALL = { "T&M": true, Contract: true, "Service Call": true, Warranty: true, Overhead: true };
 const CONTRACTISH = { "T&M": true, Contract: true, "Service Call": true, Warranty: false, Overhead: false };
 
-// input types the frontend PurgatoryGate/ knows how to render:
-//   text | textarea | address | customer | dates | file
-// verify_backing (self-report + live Procore check after distribution):
+// input types the frontend PurgatoryGate / GapResolution knows how to render:
+//   text | textarea | address | customer | dates | file | forward_verify
+// verify_backing (self-report + live Procore check):
 //   documents | email_communications | null
+// post_creation: not part of the gate's "ready to submit" check — the estimator
+//   does it in Procore directly AFTER the project exists, then HANDOFF verifies
+//   (e.g. tender emails: forward to the project inbox, then confirm they landed
+//   in the Emails tool). Still tracked as an outstanding item until verified.
 // gap_owner: who a deferred / verify-failed item routes to via GapResolution.
 export const CHECKLIST_REGISTRY = [
   {
@@ -72,12 +76,13 @@ export const CHECKLIST_REGISTRY = [
   {
     key: "tender_correspondence",
     label: "Tender correspondence",
-    input: "file",
+    input: "forward_verify",
     required: true,
+    post_creation: true,
     types: ALL,
     verify_backing: "email_communications",
     gap_owner: "estimator",
-    help: "Upload / forward the tender emails. Pushed to the project's Emails tool on creation.",
+    help: "Once the project exists, forward the tender emails to its Procore inbox. HANDOFF then confirms they landed in the Emails tool.",
   },
   {
     key: "scope_summary",
@@ -87,15 +92,6 @@ export const CHECKLIST_REGISTRY = [
     types: ALL,
     gap_owner: "estimator",
     help: "A few sentences on what's actually in scope. Seeds the handoff brief.",
-  },
-  {
-    key: "drawings",
-    label: "Drawings gathered",
-    input: "file",
-    required: false,
-    types: { ...ALL, Overhead: false },
-    gap_owner: "pm",
-    help: "IFC / shop drawings for the incoming PM. Optional here; can be resolved at handoff.",
   },
   {
     key: "estimates_reviewed",
@@ -126,6 +122,10 @@ export function normalizeType(raw) {
   if (s.includes("overhead")) return "Overhead";
   if (s.includes("contract") || s.includes("lump") || s.includes("fixed")) return "Contract";
   return null;
+}
+
+export function isPostCreation(taskType) {
+  return Boolean(CHECKLIST_REGISTRY.find((i) => i.key === taskType)?.post_creation);
 }
 
 // The gate-task rows to seed for a given project type. Unknown / null type ->

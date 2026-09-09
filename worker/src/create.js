@@ -9,7 +9,7 @@
 
 import { procoreFetch } from "./procore.js";
 import { PROJECT, STAGES, DIRECTORY, DOCUMENTS, EMAIL_TOOL, ESTIMATE_RENAME } from "./procore-shapes.js";
-import { batched, handoffTag } from "./util.js";
+import { batched } from "./util.js";
 
 async function markProgress(sql, projectId, patch) {
   await sql`
@@ -50,10 +50,21 @@ async function ensureProjectCreated(env, sql, project) {
   }
 
   const procoreProjectId = data.id;
+  // The create response usually carries the project's inbound email address; if
+  // not, a follow-up GET has it. Estimators forward tender emails to it.
+  let inboundEmail = PROJECT.extractInboundEmail(data);
+  if (!inboundEmail) {
+    const { ok: gotOk, data: full } = await procoreFetch(env, PROJECT.getPath(procoreProjectId, env.PROCORE_COMPANY_ID), {
+      version: PROJECT.version,
+    });
+    if (gotOk) inboundEmail = PROJECT.extractInboundEmail(full);
+  }
+
   await sql`
     update projects
     set procore_project_id = ${procoreProjectId}, stage = ${STAGES.TARGET_CREATE_STAGE},
-        status = 'creating', procore_created_at = now(), updated_at = now()
+        inbound_email_address = ${inboundEmail}, status = 'creating',
+        procore_created_at = now(), updated_at = now()
     where id = ${project.id}`;
   await markProgress(sql, project.id, { project_created: true });
   return { project: await reload(sql, project.id), error: null };
@@ -132,45 +143,35 @@ async function setTimeline(env, sql, project, { force = false } = {}) {
 // itself uses, just called with force:true against a single field.
 export const FIELD_PUSHERS = { address: setAddress, customer: setCustomer, po_number: setPoNumber, timeline: setTimeline };
 
-// Pushes ONE housed document into the now-existing Procore project. Shared by
-// the pipeline's bulk pushDocuments below and by gate.js's post-creation gap
-// path (uploading a PO doc / tender email after the fact, once a deferral is
-// resolved) — one push implementation either way.
+// Uploads ONE housed PO document into the now-existing Procore project's
+// Documents tool. (Tender correspondence is NOT pushed by HANDOFF — the
+// estimator forwards those to the project inbox directly, and HANDOFF only
+// verifies; see the post_creation task in checklist.js.) Shared by the
+// pipeline's pushDocuments below and gate.js's post-creation gap path.
 export async function pushOneDocument(env, sql, project, doc) {
+  if (doc.doc_type !== "po_document") return { ok: true }; // nothing else is pushed
   const bytes = await env.DOCS.get(doc.r2_key);
   if (!bytes) return { ok: false, error: `not found in R2 (${doc.r2_key})` };
 
-  if (doc.doc_type === "po_document") {
-    const form = new FormData();
-    form.append("file", new Blob([await bytes.arrayBuffer()], { type: doc.content_type || undefined }), doc.source_ref);
-    // TODO(sandbox): confirm the multipart upload contract for DOCUMENTS.uploadPath.
-    const res = await fetch(`${env.PROCORE_API_BASE}/rest/${DOCUMENTS.version}${DOCUMENTS.uploadPath(project.procore_project_id)}`, {
-      method: "POST",
-      headers: { "Procore-Company-Id": env.PROCORE_COMPANY_ID },
-      body: form,
-    });
-    if (!res.ok) return { ok: false, error: `po_document upload failed: HTTP ${res.status}` };
-  } else {
-    const text = await (await bytes.blob()).text().catch(() => "");
-    const { ok, status } = await procoreFetch(env, EMAIL_TOOL.createPath(project.procore_project_id), {
-      method: "POST",
-      version: EMAIL_TOOL.version,
-      body: { subject: doc.source_ref, body: `${handoffTag(project.id)}\n\n${text}`.slice(0, 20000) },
-    });
-    if (!ok) return { ok: false, error: `tender_correspondence push failed: HTTP ${status}` };
-  }
+  const form = new FormData();
+  form.append("file", new Blob([await bytes.arrayBuffer()], { type: doc.content_type || undefined }), doc.source_ref);
+  // TODO(sandbox): confirm the multipart upload contract for DOCUMENTS.uploadPath.
+  const res = await fetch(`${env.PROCORE_API_BASE}/rest/${DOCUMENTS.version}${DOCUMENTS.uploadPath(project.procore_project_id)}`, {
+    method: "POST",
+    headers: { "Procore-Company-Id": env.PROCORE_COMPANY_ID },
+    body: form,
+  });
+  if (!res.ok) return { ok: false, error: `po_document upload failed: HTTP ${res.status}` };
 
   await sql`update back_of_house_docs set pushed_at = now() where id = ${doc.id}`;
   return { ok: true };
 }
 
-// Pushes every not-yet-pushed housed document (PO doc to Documents, tender
-// correspondence to the Emails tool) into the now-existing Procore project.
+// Uploads every not-yet-pushed PO document into the project's Documents tool.
 async function pushDocuments(env, sql, project) {
   const docs = await sql`
     select * from back_of_house_docs
-    where project_id = ${project.id} and pushed_at is null
-      and doc_type in ('po_document', 'tender_correspondence')`;
+    where project_id = ${project.id} and pushed_at is null and doc_type = 'po_document'`;
   const errors = [];
 
   await batched(docs, async (doc) => {

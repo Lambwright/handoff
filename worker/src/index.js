@@ -85,9 +85,6 @@ router.post("/gate-tasks/:id/verify", { roles: [] }, verifyGateTask);
 router.post("/projects/:id/gate/po-document", { roles: ["estimator"] }, (ctx) =>
   uploadGateDocument(ctx, "po_document")
 );
-router.post("/projects/:id/gate/tender-correspondence", { roles: ["estimator"] }, (ctx) =>
-  uploadGateDocument(ctx, "tender_correspondence")
-);
 router.post("/projects/:id/gate/submit", { roles: ["estimator", "admin"] }, submitGate);
 
 router.get("/pm-roster", { roles: [] }, getPmRoster);

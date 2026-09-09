@@ -94,6 +94,12 @@ export default function ProjectView({ procoreProjectId }) {
             <span className="kv-label">Assigned PM</span>
             <span className="kv-value">{assignment?.assigned_pm || "unassigned"}</span>
           </div>
+          {project.inbound_email_address && (
+            <div className="kv">
+              <span className="kv-label">Project inbox (Emails tool)</span>
+              <span className="kv-value mono">{project.inbound_email_address}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -144,7 +150,7 @@ export default function ProjectView({ procoreProjectId }) {
           </div>
           <div className="checklist">
             {gaps.map((task) => (
-              <GapResolution key={task.id} task={task} projectId={handoffId} onChanged={() => loadSummary(handoffId)} />
+              <GapResolution key={task.id} task={task} projectId={handoffId} project={project} onChanged={() => loadSummary(handoffId)} />
             ))}
           </div>
         </div>

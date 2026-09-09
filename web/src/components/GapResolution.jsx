@@ -16,9 +16,8 @@ const TASK_INPUT_TYPES = {
   timeline: "dates",
   po_number: "text",
   po_document: "file",
-  tender_correspondence: "file",
+  tender_correspondence: "forward_verify", // done in Procore post-creation, then verified
   scope_summary: "textarea",
-  drawings: "file",
   estimates_reviewed: "text",
   site_contact: "text",
 };
@@ -79,7 +78,7 @@ function ValueInput({ task, draft, setDraft }) {
   return null; // file / customer have their own dedicated flows below
 }
 
-export default function GapResolution({ task, projectId, onChanged }) {
+export default function GapResolution({ task, projectId, project, onChanged }) {
   const [draft, setDraft] = useState(null);
   const [deferReason, setDeferReason] = useState("");
   const [showDefer, setShowDefer] = useState(false);
@@ -182,6 +181,28 @@ export default function GapResolution({ task, projectId, onChanged }) {
         </div>
       )}
 
+      {!locked && input === "forward_verify" && (
+        <div className="checklist-item-body">
+          {!project?.procore_project_id ? (
+            <div className="row-secondary">Available once the project is created.</div>
+          ) : (
+            <>
+              <div className="row-secondary">
+                Forward the tender emails to this project's Procore inbox:
+                <div className="kv-value mono" style={{ marginTop: 4 }}>
+                  {project.inbound_email_address || "(address not captured — check the project's Emails tool settings)"}
+                </div>
+              </div>
+              <div className="checklist-item-actions">
+                <button className="btn btn-accent btn-sm" disabled={busy} onClick={retryVerify}>
+                  I've forwarded them — check
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {!locked && input === "customer" && (
         <div className="checklist-item-body">
           {task.value?.suggestion?.confidence === "high" && task.value.suggestion.match && (
@@ -226,7 +247,7 @@ export default function GapResolution({ task, projectId, onChanged }) {
         </div>
       )}
 
-      {!locked && input !== "file" && input !== "customer" && (
+      {!locked && input !== "file" && input !== "customer" && input !== "forward_verify" && (
         <div className="checklist-item-body">
           <ValueInput task={task} draft={draft} setDraft={setDraft} />
           <div className="checklist-item-actions">
@@ -250,14 +271,14 @@ export default function GapResolution({ task, projectId, onChanged }) {
         </div>
       )}
 
-      {!locked && (input === "file" || input === "customer") && !showDefer && (
+      {!locked && (input === "file" || input === "customer" || input === "forward_verify") && !showDefer && (
         <div className="checklist-item-actions" style={{ marginTop: 6 }}>
           <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setShowDefer(true)}>
             Defer instead
           </button>
         </div>
       )}
-      {!locked && (input === "file" || input === "customer") && showDefer && (
+      {!locked && (input === "file" || input === "customer" || input === "forward_verify") && showDefer && (
         <div className="checklist-item-actions" style={{ marginTop: 6 }}>
           <input placeholder="Why not yet?" value={deferReason} onChange={(e) => setDeferReason(e.target.value)} style={{ flex: 1 }} />
           <button className="btn btn-ghost btn-sm" disabled={busy} onClick={saveDefer}>
@@ -274,6 +295,7 @@ export default function GapResolution({ task, projectId, onChanged }) {
           {input === "text" && (task.value?.po_number || task.value)}
           {input === "textarea" && task.value}
           {input === "file" && task.value?.filename}
+          {input === "forward_verify" && (task.verify_note || "Confirmed in Procore")}
         </div>
       )}
     </div>

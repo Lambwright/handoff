@@ -2,6 +2,7 @@
 // Full Screen tool's PM read view).
 
 import { json } from "./http.js";
+import { isPostCreation } from "./checklist.js";
 
 export async function listProjects({ url, sql }) {
   const status = url.searchParams.get("status");
@@ -37,7 +38,13 @@ export async function getProjectSummary({ params, sql }) {
   return json({
     project,
     gate_tasks: gateTasks,
-    gaps: gateTasks.filter((t) => ["deferred", "verify_failed"].includes(t.status)),
+    // Open items for the PM view: deferred, failed verification, or a
+    // post-creation task not yet done (tender emails).
+    gaps: gateTasks.filter(
+      (t) =>
+        ["deferred", "verify_failed"].includes(t.status) ||
+        (isPostCreation(t.task_type) && t.status !== "complete")
+    ),
     brief: briefRow[0] || null,
     assignment: assignmentRow[0] || null,
     docs,

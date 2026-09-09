@@ -4,6 +4,7 @@
 
 import { json } from "./http.js";
 import { runCreatePipeline, verifyBackedTask, pushOneDocument, FIELD_PUSHERS } from "./create.js";
+import { isPostCreation } from "./checklist.js";
 
 async function loadProjectAndTasks(sql, projectId) {
   const [project] = await sql`select * from projects where id = ${projectId}`;
@@ -155,7 +156,9 @@ export async function uploadGateDocument({ params, request, env, sql, auth }, do
 }
 
 function gateIsComplete(tasks) {
-  const blocking = tasks.filter((t) => t.required);
+  // post_creation items (tender emails, etc.) are done in Procore after the
+  // project exists — they don't block the submit that creates it.
+  const blocking = tasks.filter((t) => t.required && !isPostCreation(t.task_type));
   const unresolved = blocking.filter((t) => !["complete", "deferred"].includes(t.status));
   return { ready: unresolved.length === 0, unresolved };
 }

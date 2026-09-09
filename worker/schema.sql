@@ -67,6 +67,7 @@ create table projects (
   customer jsonb,                         -- {directory_id, name} | {create:true, name, ...}
   po_number text,
   timeline jsonb,                         -- {start_date, end_date} confirmed during the gate
+  inbound_email_address text,             -- the Procore project's Emails-tool inbox (set at creation)
   create_progress jsonb not null default '{}'::jsonb,  -- which create.js steps have succeeded
   created_by text not null,              -- einbau_username of the estimator who opened it
   created_at timestamptz not null default now(),
