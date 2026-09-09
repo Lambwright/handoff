@@ -5,6 +5,9 @@
 import { json } from "./http.js";
 import { runCreatePipeline, verifyBackedTask, pushOneDocument, FIELD_PUSHERS } from "./create.js";
 import { isPostCreation } from "./checklist.js";
+import { callClaude } from "./claude.js";
+import { procoreFetch } from "./procore.js";
+import { EMAIL_TOOL } from "./procore-shapes.js";
 
 async function loadProjectAndTasks(sql, projectId) {
   const [project] = await sql`select * from projects where id = ${projectId}`;
@@ -64,11 +67,14 @@ export async function patchGateTask({ params, request, env, sql, auth }) {
   // Neon's tagged-template driver doesn't support a dynamic identifier helper
   // the way postgres.js does, so this is spelled out per column rather than
   // interpolating `task.task_type` as a column name.
+  const v = body.value;
   let projectPatch = null;
-  if (task.task_type === "address") projectPatch = sql`update projects set address = ${JSON.stringify(body.value)}::jsonb, updated_at = now() where id = ${task.project_id} returning *`;
-  else if (task.task_type === "customer") projectPatch = sql`update projects set customer = ${JSON.stringify(body.value)}::jsonb, updated_at = now() where id = ${task.project_id} returning *`;
-  else if (task.task_type === "timeline") projectPatch = sql`update projects set timeline = ${JSON.stringify(body.value)}::jsonb, updated_at = now() where id = ${task.project_id} returning *`;
-  else if (task.task_type === "po_number") projectPatch = sql`update projects set po_number = ${body.value?.po_number ?? body.value}, updated_at = now() where id = ${task.project_id} returning *`;
+  if (task.task_type === "address") projectPatch = sql`update projects set address = ${JSON.stringify(v)}::jsonb, updated_at = now() where id = ${task.project_id} returning *`;
+  else if (task.task_type === "customer") projectPatch = sql`update projects set customer = ${JSON.stringify(v)}::jsonb, updated_at = now() where id = ${task.project_id} returning *`;
+  else if (task.task_type === "timeline") projectPatch = sql`update projects set timeline = ${JSON.stringify(v)}::jsonb, updated_at = now() where id = ${task.project_id} returning *`;
+  else if (task.task_type === "po_number") projectPatch = sql`update projects set po_number = ${v?.po_number ?? v}, updated_at = now() where id = ${task.project_id} returning *`;
+  else if (task.task_type === "region") projectPatch = sql`update projects set region_id = ${v?.id ?? v}, updated_at = now() where id = ${task.project_id} returning *`;
+  else if (task.task_type === "timezone") projectPatch = sql`update projects set timezone = ${v?.name ?? v}, updated_at = now() where id = ${task.project_id} returning *`;
 
   if (projectPatch) {
     const [freshProject] = await projectPatch;
@@ -153,6 +159,43 @@ export async function uploadGateDocument({ params, request, env, sql, auth }, do
     returning *`;
 
   return json({ doc, task });
+}
+
+// POST /projects/:id/scope-draft — AI-draft the scope summary from whatever
+// context HANDOFF can reach: the bid record, and (once the project exists) the
+// tender emails forwarded into Procore's Emails tool.
+// TODO(sandbox): also pull SCOUT's notes for the bid and the project-level
+// Estimating tool's line items — both need their REST surfaces confirmed first.
+export async function draftScopeSummary({ params, env, sql }) {
+  const [project] = await sql`select * from projects where id = ${params.id}`;
+  if (!project) return json({ error: "not_found" }, 404);
+
+  let emails = [];
+  if (project.procore_project_id) {
+    const { ok, data } = await procoreFetch(env, EMAIL_TOOL.listPath(project.procore_project_id), { version: EMAIL_TOOL.version });
+    if (ok && Array.isArray(data?.emails)) {
+      emails = data.emails.slice(0, 15).map((e) => ({ subject: e.subject, sent_at: e.email_sent_at, snippet: (e.body || "").replace(/<[^>]+>/g, " ").slice(0, 800) }));
+    }
+  }
+
+  const bid = project.bid_snapshot || {};
+  let draft = "";
+  try {
+    draft = await callClaude(env, {
+      maxTokens: 700,
+      system:
+        "You draft a short 'scope of work' summary for an Einbau Services millwork-installation project handoff, for the incoming PM. " +
+        "Use only the material given. If it's thin, say what's known and flag what's missing — do not invent scope. 4-8 sentences, plain prose, no bullet markup.",
+      userMessage: JSON.stringify({
+        project: { name: project.name, type: project.project_type, customer: project.customer?.name, address: project.address },
+        bid: { name: bid.name, description: bid.description, estimate_total: bid.stats?.total },
+        tender_emails: emails,
+      }),
+    });
+  } catch (e) {
+    draft = `(AI draft unavailable: ${e.message})`;
+  }
+  return json({ draft, context: { tender_email_count: emails.length } });
 }
 
 function gateIsComplete(tasks) {

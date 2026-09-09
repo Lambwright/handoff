@@ -66,6 +66,8 @@ create table projects (
   address jsonb,                          -- {street, city, state_code, postal_code, country_code, ...}
   customer jsonb,                         -- {directory_id, name} | {create:true, name, ...}
   po_number text,
+  region_id text,                         -- Procore project_region_id (Einbau branch)
+  timezone text,                          -- Procore time_zone name
   timeline jsonb,                         -- {start_date, end_date} confirmed during the gate
   inbound_email_address text,             -- the Procore project's Emails-tool inbox (set at creation)
   create_progress jsonb not null default '{}'::jsonb,  -- which create.js steps have succeeded

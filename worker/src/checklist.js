@@ -18,7 +18,8 @@ const ALL = { "T&M": true, Contract: true, "Service Call": true, Warranty: true,
 const CONTRACTISH = { "T&M": true, Contract: true, "Service Call": true, Warranty: false, Overhead: false };
 
 // input types the frontend PurgatoryGate / GapResolution knows how to render:
-//   text | textarea | address | customer | dates | file | forward_verify
+//   text | textarea | address | customer | dates | file | select |
+//   forward_verify (post-creation prompt+verify) | scope_draft (AI draft + edit)
 // verify_backing (self-report + live Procore check):
 //   documents | email_communications | null
 // post_creation: not part of the gate's "ready to submit" check — the estimator
@@ -44,6 +45,24 @@ export const CHECKLIST_REGISTRY = [
     types: ALL,
     gap_owner: "estimator",
     help: "Matched against the Procore Directory. Confirm the match or search / create.",
+  },
+  {
+    key: "timezone",
+    label: "Timezone",
+    input: "select",
+    required: true,
+    types: ALL,
+    gap_owner: "estimator",
+    help: "Pre-filled from the address. Written to the Procore project on creation.",
+  },
+  {
+    key: "region",
+    label: "Region",
+    input: "select",
+    required: true,
+    types: ALL,
+    gap_owner: "estimator",
+    help: "Einbau branch/region. Also feeds PM-assignment affinity.",
   },
   {
     key: "timeline",
@@ -87,28 +106,21 @@ export const CHECKLIST_REGISTRY = [
   {
     key: "scope_summary",
     label: "Scope summary",
-    input: "textarea",
+    input: "scope_draft",
     required: true,
+    post_creation: true,
     types: ALL,
     gap_owner: "estimator",
-    help: "A few sentences on what's actually in scope. Seeds the handoff brief.",
+    help: "AI-drafted from the estimate + tender correspondence; the estimator reviews and edits. Seeds the handoff brief.",
   },
   {
     key: "estimates_reviewed",
     label: "Estimate reviewed with PM lead",
     input: "text",
     required: false,
+    post_creation: true,
     types: { "T&M": false, Contract: true, "Service Call": true, Warranty: false, Overhead: false },
     gap_owner: "estimator",
-  },
-  {
-    key: "site_contact",
-    label: "Key site contact",
-    input: "text",
-    required: false,
-    types: ALL,
-    gap_owner: "pm",
-    help: "Name + phone for the person on site, if known.",
   },
 ];
 

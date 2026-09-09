@@ -5,7 +5,7 @@
 import { json } from "./http.js";
 import { verifyIdentity, resolveActor } from "./auth.js";
 import { procoreFetch } from "./procore.js";
-import { PROCORE_DEPARTMENTS } from "./procore-shapes.js";
+import { PROCORE_DEPARTMENTS, REGIONS, TIMEZONES } from "./procore-shapes.js";
 
 // TEMPORARY diagnostic — an authenticated passthrough to an arbitrary Procore
 // REST path, used to nail down the real endpoint/response shapes the
@@ -49,6 +49,18 @@ export async function getMe({ request, env, sql }) {
 // doesn't mean it's a valid PM, only that it's a real option in Procore.
 export async function listDepartments() {
   return json({ departments: PROCORE_DEPARTMENTS });
+}
+
+// GET /regions — Einbau's Procore project regions (branches), live.
+export async function listRegions({ env }) {
+  const { ok, data } = await procoreFetch(env, REGIONS.listPath(env.PROCORE_COMPANY_ID), { version: REGIONS.version });
+  const regions = ok && Array.isArray(data) ? data.map((r) => ({ id: String(r.id), name: r.name })) : [];
+  return json({ regions });
+}
+
+// GET /timezones — the fixed list (no useful Procore endpoint).
+export async function listTimezones() {
+  return json({ timezones: TIMEZONES });
 }
 
 export async function listUsers({ sql }) {

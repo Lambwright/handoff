@@ -194,6 +194,45 @@ export const PROCORE_DEPARTMENTS = [
 ];
 
 // ---------------------------------------------------------------------------
+// Project regions (Einbau branches) + timezones — for the gate's Region /
+// Timezone tasks. Regions are live (confirmed by probe 2026-09-05:
+// /companies/{co}/project_regions -> [{id, name:"Einbau GTA"}, ...]).
+// Timezones have no useful endpoint — Rails' list, stored by name, same as
+// punch-worker hardcodes.
+// ---------------------------------------------------------------------------
+export const REGIONS = {
+  listPath: (companyId) => `/companies/${companyId}/project_regions`,
+  version: "v1.0",
+};
+
+export const TIMEZONES = [
+  "Pacific Time (US & Canada)",
+  "Mountain Time (US & Canada)",
+  "Saskatchewan",
+  "Central Time (US & Canada)",
+  "Eastern Time (US & Canada)",
+  "Atlantic Time (Canada)",
+  "Newfoundland",
+];
+
+// Rough state/province -> timezone default so the gate pre-fills it.
+export const PROVINCE_TIMEZONE = {
+  BC: "Pacific Time (US & Canada)",
+  YT: "Pacific Time (US & Canada)",
+  AB: "Mountain Time (US & Canada)",
+  NT: "Mountain Time (US & Canada)",
+  SK: "Saskatchewan",
+  MB: "Central Time (US & Canada)",
+  NU: "Central Time (US & Canada)",
+  ON: "Eastern Time (US & Canada)",
+  QC: "Eastern Time (US & Canada)",
+  NB: "Atlantic Time (Canada)",
+  NS: "Atlantic Time (Canada)",
+  PE: "Atlantic Time (Canada)",
+  NL: "Newfoundland",
+};
+
+// ---------------------------------------------------------------------------
 // Project create + admin-field writes
 // ---------------------------------------------------------------------------
 export const PROJECT = {
@@ -257,6 +296,14 @@ export const PROJECT = {
   // applies independently of this.)
   buildPoNumberPatch({ companyId, poNumber }) {
     return { company_id: companyId, project: { [`custom_field_${PROCORE_CUSTOM_FIELDS.poNumber}`]: poNumber } };
+  },
+
+  // CONFIRMED live (punch-worker buildProcoreWriteback "region" / "timezone").
+  buildRegionPatch({ companyId, regionId }) {
+    return { company_id: companyId, project: { project_region_id: Number(regionId) } };
+  },
+  buildTimezonePatch({ companyId, timezone }) {
+    return { company_id: companyId, project: { time_zone: timezone } };
   },
 
   // CONFIRMED (Ben, 2026-09-04): assignment is written via the project's

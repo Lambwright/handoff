@@ -10,7 +10,7 @@
 
 import { json } from "./http.js";
 import { procoreFetch } from "./procore.js";
-import { BID_BOARD } from "./procore-shapes.js";
+import { BID_BOARD, PROVINCE_TIMEZONE } from "./procore-shapes.js";
 import { normalizeType, buildGateTasks } from "./checklist.js";
 import { suggestCustomerMatch } from "./matching.js";
 
@@ -191,14 +191,19 @@ export async function openHandoff({ request, env, sql, auth }) {
   // Pre-fill the tasks we already have data for (address off the bid) so the
   // estimator confirms rather than retypes. Timeline isn't on the bid, so it
   // stays empty.
+  const tzGuess = PROVINCE_TIMEZONE[(draft.address?.state_code || "").toUpperCase()] || null;
   for (const t of tasks) {
-    const seedValue = t.task_type === "address" ? draft.address : null;
+    let seedValue = null;
+    if (t.task_type === "address") seedValue = draft.address;
+    else if (t.task_type === "timezone" && tzGuess) seedValue = { name: tzGuess };
     await sql`
       insert into gate_tasks (project_id, task_type, label, required, verify_backing, gap_owner, status, value)
       values (${project.id}, ${t.task_type}, ${t.label}, ${t.required}, ${t.verify_backing}, ${t.gap_owner},
               'pending', ${seedValue ? JSON.stringify(seedValue) : null}::jsonb)
       on conflict (project_id, task_type) do nothing`;
   }
+  // The timezone guess also lands on the projects row so create.js can push it.
+  if (tzGuess) await sql`update projects set timezone = ${tzGuess} where id = ${project.id}`;
 
   return json({ project_id: project.id, resumed: false }, 201);
 }

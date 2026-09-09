@@ -18,13 +18,24 @@ function stageLink(hash) {
 // disabled, which is the point (kickoff doc: falsely claiming completion should
 // cost the same effort as actually doing it — here, it simply can't be claimed
 // without a real value or an honest deferral reason).
+// Mirror of checklist.js: items done in Procore AFTER the project exists — they
+// don't appear on the pre-create page and don't block the submit.
+const POST_CREATION = new Set(["tender_correspondence", "scope_summary", "estimates_reviewed"]);
+
 export default function PurgatoryGate({ projectId }) {
   const [project, setProject] = useState(null);
   const [tasks, setTasks] = useState([]);
+  const [regionOptions, setRegionOptions] = useState([]);
+  const [timezoneOptions, setTimezoneOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState(null);
+
+  useEffect(() => {
+    api.listRegions().then((d) => setRegionOptions(d.regions || [])).catch(() => {});
+    api.listTimezones().then((d) => setTimezoneOptions((d.timezones || []).map((t) => ({ id: t, name: t })))).catch(() => {});
+  }, []);
 
   const load = useCallback(() => {
     setError(null);
@@ -65,10 +76,8 @@ export default function PurgatoryGate({ projectId }) {
   if (error && !project) return <div className="card" style={{ color: "var(--red)" }}>{error}</div>;
   if (!project) return null;
 
-  // Mirror of checklist.js: post_creation items (tender emails) don't block the
-  // submit that creates the project — they're done in Procore afterward.
-  const POST_CREATION = new Set(["tender_correspondence"]);
-  const blocking = tasks.filter((t) => t.required && !POST_CREATION.has(t.task_type));
+  const preTasks = tasks.filter((t) => !POST_CREATION.has(t.task_type));
+  const blocking = preTasks.filter((t) => t.required);
   const done = blocking.filter((t) => ["complete", "deferred"].includes(t.status));
   const ready = done.length === blocking.length;
   const alreadyCreated = project.status !== "gate";
@@ -116,7 +125,7 @@ export default function PurgatoryGate({ projectId }) {
           </div>
           <div className="checklist">
             {postTasks.map((task) => (
-              <GapResolution key={task.id} task={task} projectId={projectId} project={project} onChanged={load} />
+              <GapResolution key={task.id} task={task} projectId={projectId} project={project} onChanged={load} regionOptions={regionOptions} timezoneOptions={timezoneOptions} />
             ))}
           </div>
         </div>
@@ -145,8 +154,8 @@ export default function PurgatoryGate({ projectId }) {
           )}
 
           <div className="checklist">
-            {tasks.map((task) => (
-              <GapResolution key={task.id} task={task} projectId={projectId} project={project} onChanged={load} />
+            {preTasks.map((task) => (
+              <GapResolution key={task.id} task={task} projectId={projectId} project={project} onChanged={load} regionOptions={regionOptions} timezoneOptions={timezoneOptions} />
             ))}
           </div>
 

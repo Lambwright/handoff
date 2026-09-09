@@ -38,7 +38,7 @@
 import { json, preflight } from "./http.js";
 import { sqlFor } from "./db.js";
 import { makeRouter } from "./router.js";
-import { getMe, listUsers, upsertUser, deactivateUser, listDepartments, procoreProbe } from "./admin.js";
+import { getMe, listUsers, upsertUser, deactivateUser, listDepartments, listRegions, listTimezones, procoreProbe } from "./admin.js";
 import { listAwardedBids, openHandoff, refreshBids } from "./bids.js";
 import { searchCustomerDirectory } from "./matching.js";
 import {
@@ -47,6 +47,7 @@ import {
   verifyGateTask,
   uploadGateDocument,
   submitGate,
+  draftScopeSummary,
 } from "./gate.js";
 import {
   getAssignmentCandidates,
@@ -69,6 +70,8 @@ router.get("/admin/users", { roles: ["admin"] }, listUsers);
 router.post("/admin/users", { roles: ["admin"] }, upsertUser);
 router.delete("/admin/users/:id", { roles: ["admin"] }, deactivateUser);
 router.get("/departments", { roles: [] }, listDepartments);
+router.get("/regions", { roles: [] }, listRegions);
+router.get("/timezones", { roles: [] }, listTimezones);
 router.post("/admin/procore-probe", { roles: ["admin"] }, procoreProbe); // TEMPORARY — remove after procore-shapes.js is confirmed
 
 router.get("/bids", { roles: ["estimator", "assignment"] }, listAwardedBids);
@@ -86,6 +89,7 @@ router.post("/projects/:id/gate/po-document", { roles: ["estimator"] }, (ctx) =>
   uploadGateDocument(ctx, "po_document")
 );
 router.post("/projects/:id/gate/submit", { roles: ["estimator", "admin"] }, submitGate);
+router.post("/projects/:id/scope-draft", { roles: ["estimator", "pm"] }, draftScopeSummary);
 
 router.get("/pm-roster", { roles: [] }, getPmRoster);
 router.get("/assignment/:id/candidates", { roles: ["assignment"] }, getAssignmentCandidates);

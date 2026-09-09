@@ -13,17 +13,46 @@ import { api } from "../api.js";
 const TASK_INPUT_TYPES = {
   address: "address",
   customer: "customer",
+  timezone: "select",
+  region: "select",
   timeline: "dates",
   po_number: "text",
   po_document: "file",
   tender_correspondence: "forward_verify", // done in Procore post-creation, then verified
-  scope_summary: "textarea",
+  scope_summary: "scope_draft", // AI draft + estimator edit, post-creation
   estimates_reviewed: "text",
-  site_contact: "text",
 };
 
-function ValueInput({ task, draft, setDraft }) {
+const SELECT_OPTIONS_KEY = { region: "regionOptions", timezone: "timezoneOptions" };
+
+function ValueInput({ task, draft, setDraft, regionOptions = [], timezoneOptions = [] }) {
   const input = TASK_INPUT_TYPES[task.task_type] || "text";
+
+  if (input === "select") {
+    const opts = task.task_type === "region" ? regionOptions : timezoneOptions;
+    // region value is {id, name}; timezone value is {name}
+    const cur = draft ?? task.value ?? {};
+    const curKey = task.task_type === "region" ? cur.id || "" : cur.name || "";
+    return (
+      <select
+        value={curKey}
+        onChange={(e) => {
+          const o = opts.find((x) => String(task.task_type === "region" ? x.id : x.name) === e.target.value);
+          setDraft(task.task_type === "region" ? { id: o?.id, name: o?.name } : { name: o?.name || e.target.value });
+        }}
+      >
+        <option value="">— select —</option>
+        {opts.map((o) => {
+          const val = task.task_type === "region" ? String(o.id) : o.name;
+          return (
+            <option key={val} value={val}>
+              {o.name}
+            </option>
+          );
+        })}
+      </select>
+    );
+  }
 
   if (input === "address") {
     const v = draft || task.value || {};
@@ -78,7 +107,7 @@ function ValueInput({ task, draft, setDraft }) {
   return null; // file / customer have their own dedicated flows below
 }
 
-export default function GapResolution({ task, projectId, project, onChanged }) {
+export default function GapResolution({ task, projectId, project, onChanged, regionOptions = [], timezoneOptions = [] }) {
   const [draft, setDraft] = useState(null);
   const [deferReason, setDeferReason] = useState("");
   const [showDefer, setShowDefer] = useState(false);
@@ -86,9 +115,23 @@ export default function GapResolution({ task, projectId, project, onChanged }) {
   const [error, setError] = useState(null);
   const [customerQuery, setCustomerQuery] = useState("");
   const [customerResults, setCustomerResults] = useState(null);
+  const [drafting, setDrafting] = useState(false);
 
   const input = TASK_INPUT_TYPES[task.task_type] || "text";
   const locked = task.status === "complete";
+
+  async function aiDraft() {
+    setDrafting(true);
+    setError(null);
+    try {
+      const { draft: text } = await api.draftScope(projectId);
+      setDraft(text);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setDrafting(false);
+    }
+  }
 
   async function complete(value) {
     setBusy(true);
@@ -181,6 +224,28 @@ export default function GapResolution({ task, projectId, project, onChanged }) {
         </div>
       )}
 
+      {!locked && input === "scope_draft" && (
+        <div className="checklist-item-body">
+          <textarea
+            rows={6}
+            placeholder="Scope of work for the incoming PM…"
+            value={draft ?? task.value ?? ""}
+            onChange={(e) => setDraft(e.target.value)}
+          />
+          <div className="checklist-item-actions">
+            <button className="btn btn-ghost btn-sm" disabled={drafting || busy || !project?.procore_project_id} onClick={aiDraft}>
+              {drafting ? "Drafting…" : "Draft with AI"}
+            </button>
+            <button className="btn btn-accent btn-sm" disabled={busy} onClick={() => complete(draft ?? task.value ?? "")}>
+              Save
+            </button>
+          </div>
+          {!project?.procore_project_id && (
+            <div className="field-help">AI draft reads the estimate + tender emails — available once the project exists.</div>
+          )}
+        </div>
+      )}
+
       {!locked && input === "forward_verify" && (
         <div className="checklist-item-body">
           {!project?.procore_project_id ? (
@@ -230,9 +295,9 @@ export default function GapResolution({ task, projectId, project, onChanged }) {
             <button className="btn btn-ghost btn-sm" onClick={runCustomerSearch} disabled={busy}>
               Search
             </button>
-            <button className="btn btn-ghost btn-sm" disabled={busy || !customerQuery.trim()} onClick={() => complete({ create: true, name: customerQuery.trim() })}>
-              Create new: "{customerQuery.trim()}"
-            </button>
+          </div>
+          <div className="field-help">
+            The customer must already exist in the Procore Directory — SCOUT / INTAKE handle adding new ones.
           </div>
           {customerResults && (
             <div>
@@ -247,9 +312,9 @@ export default function GapResolution({ task, projectId, project, onChanged }) {
         </div>
       )}
 
-      {!locked && input !== "file" && input !== "customer" && input !== "forward_verify" && (
+      {!locked && input !== "file" && input !== "customer" && input !== "forward_verify" && input !== "scope_draft" && (
         <div className="checklist-item-body">
-          <ValueInput task={task} draft={draft} setDraft={setDraft} />
+          <ValueInput task={task} draft={draft} setDraft={setDraft} regionOptions={regionOptions} timezoneOptions={timezoneOptions} />
           <div className="checklist-item-actions">
             <button className="btn btn-accent btn-sm" disabled={busy} onClick={() => complete(draft ?? task.value)}>
               {task.status === "pending" ? "Confirm" : "Save"}
@@ -271,14 +336,14 @@ export default function GapResolution({ task, projectId, project, onChanged }) {
         </div>
       )}
 
-      {!locked && (input === "file" || input === "customer" || input === "forward_verify") && !showDefer && (
+      {!locked && (input === "file" || input === "customer" || input === "forward_verify" || input === "scope_draft") && !showDefer && (
         <div className="checklist-item-actions" style={{ marginTop: 6 }}>
           <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setShowDefer(true)}>
             Defer instead
           </button>
         </div>
       )}
-      {!locked && (input === "file" || input === "customer" || input === "forward_verify") && showDefer && (
+      {!locked && (input === "file" || input === "customer" || input === "forward_verify" || input === "scope_draft") && showDefer && (
         <div className="checklist-item-actions" style={{ marginTop: 6 }}>
           <input placeholder="Why not yet?" value={deferReason} onChange={(e) => setDeferReason(e.target.value)} style={{ flex: 1 }} />
           <button className="btn btn-ghost btn-sm" disabled={busy} onClick={saveDefer}>
@@ -294,6 +359,8 @@ export default function GapResolution({ task, projectId, project, onChanged }) {
           {input === "customer" && task.value && task.value.name}
           {input === "text" && (task.value?.po_number || task.value)}
           {input === "textarea" && task.value}
+          {input === "scope_draft" && task.value}
+          {input === "select" && (task.value?.name || task.value)}
           {input === "file" && task.value?.filename}
           {input === "forward_verify" && (task.verify_note || "Confirmed in Procore")}
         </div>

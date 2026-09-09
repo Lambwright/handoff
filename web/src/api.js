@@ -47,6 +47,8 @@ export const api = {
   upsertUser: (fields) => request("/admin/users", { method: "POST", body: fields }),
   deactivateUser: (id) => request(`/admin/users/${id}`, { method: "DELETE" }),
   listDepartments: () => request("/departments"),
+  listRegions: () => request("/regions"),
+  listTimezones: () => request("/timezones"),
   listPmRoster: () => request("/pm-roster"),
 
   listBids: () => request("/bids"),
@@ -62,6 +64,7 @@ export const api = {
   uploadPoDocument: (projectId, file) => uploadFile(`/projects/${projectId}/gate/po-document`, file),
   uploadTenderCorrespondence: (projectId, file) => uploadFile(`/projects/${projectId}/gate/tender-correspondence`, file),
   submitGate: (projectId) => request(`/projects/${projectId}/gate/submit`, { method: "POST", body: {} }),
+  draftScope: (projectId) => request(`/projects/${projectId}/scope-draft`, { method: "POST", body: {} }),
 
   searchCustomers: (q) => request(`/customer-search?q=${encodeURIComponent(q)}`),
 

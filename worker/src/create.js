@@ -88,21 +88,10 @@ async function setAddress(env, sql, project, { force = false } = {}) {
 async function setCustomer(env, sql, project, { force = false } = {}) {
   if ((!force && project.create_progress?.customer_set) || !project.customer) return null;
   const customer = project.customer;
-  let directoryId = customer.directory_id || customer.suggestion?.match?.directory_id || null;
-
-  if (!directoryId && (customer.create || !directoryId) && customer.name) {
-    // Coordinated write at the Project Directory level — per the kickoff doc this
-    // cascades to the Company Directory automatically (confirm with a real
-    // sandbox write; see procore-shapes.js DIRECTORY TODO).
-    const { ok, status, data } = await procoreFetch(
-      env,
-      DIRECTORY.createProjectDirectoryCompanyPath(project.procore_project_id),
-      { method: "POST", version: DIRECTORY.version, body: DIRECTORY.buildDirectoryCompany(customer) }
-    );
-    if (!ok) return `customer create failed (HTTP ${status}): ${JSON.stringify(data).slice(0, 300)}`;
-    directoryId = data.id;
-  }
-  if (!directoryId) return "customer has no directory_id and no name to create from";
+  // Ben (2026-09-08): the customer must already exist in the Directory (SCOUT /
+  // INTAKE own creating them). HANDOFF only picks an existing one.
+  const directoryId = customer.directory_id || customer.suggestion?.match?.directory_id || null;
+  if (!directoryId) return "customer isn't linked to a Directory company yet";
 
   const { ok, status, data } = await procoreFetch(env, PROJECT.patchPath(project.procore_project_id, env.PROCORE_COMPANY_ID), {
     method: "PATCH",
@@ -138,10 +127,34 @@ async function setTimeline(env, sql, project, { force = false } = {}) {
   return null;
 }
 
+async function setRegion(env, sql, project, { force = false } = {}) {
+  if ((!force && project.create_progress?.region_set) || !project.region_id) return null;
+  const { ok, status, data } = await procoreFetch(env, PROJECT.patchPath(project.procore_project_id, env.PROCORE_COMPANY_ID), {
+    method: "PATCH",
+    version: PROJECT.version,
+    body: PROJECT.buildRegionPatch({ companyId: env.PROCORE_COMPANY_ID, regionId: project.region_id }),
+  });
+  if (!ok) return `region PATCH failed (HTTP ${status}): ${JSON.stringify(data).slice(0, 300)}`;
+  await markProgress(sql, project.id, { region_set: true });
+  return null;
+}
+
+async function setTimezone(env, sql, project, { force = false } = {}) {
+  if ((!force && project.create_progress?.timezone_set) || !project.timezone) return null;
+  const { ok, status, data } = await procoreFetch(env, PROJECT.patchPath(project.procore_project_id, env.PROCORE_COMPANY_ID), {
+    method: "PATCH",
+    version: PROJECT.version,
+    body: PROJECT.buildTimezonePatch({ companyId: env.PROCORE_COMPANY_ID, timezone: project.timezone }),
+  });
+  if (!ok) return `timezone PATCH failed (HTTP ${status}): ${JSON.stringify(data).slice(0, 300)}`;
+  await markProgress(sql, project.id, { timezone_set: true });
+  return null;
+}
+
 // Exposed so gate.js can re-push ONE field immediately when a post-creation gap
 // (a deferred item, resolved late) is filled in — same write logic the pipeline
 // itself uses, just called with force:true against a single field.
-export const FIELD_PUSHERS = { address: setAddress, customer: setCustomer, po_number: setPoNumber, timeline: setTimeline };
+export const FIELD_PUSHERS = { address: setAddress, customer: setCustomer, po_number: setPoNumber, timeline: setTimeline, region: setRegion, timezone: setTimezone };
 
 // Uploads ONE housed PO document into the now-existing Procore project's
 // Documents tool. (Tender correspondence is NOT pushed by HANDOFF — the
@@ -252,7 +265,7 @@ export async function runCreatePipeline(env, sql, projectId, actorUsername) {
     return { project, errors, complete: false };
   }
 
-  for (const step of [setAddress, setCustomer, setPoNumber, setTimeline]) {
+  for (const step of [setAddress, setCustomer, setPoNumber, setTimeline, setRegion, setTimezone]) {
     const err = await step(env, sql, project);
     if (err) errors.push(err);
     project = await reload(sql, projectId);
