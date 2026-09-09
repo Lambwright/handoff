@@ -124,6 +124,20 @@ so confirming each is a single-file change).
   work.
 - **Automatic marked-up-drawing extraction** — explore later, not committed.
 - **Real notification/email transport** — see `worker/README.md`.
+- **PO deep-parse (baseline diff).** Big-GC POs run to hundreds of pages of
+  boilerplate. The brief never ingests the whole thing. Future: an on-demand
+  "Parse PO" the PM triggers, using a cached reference PO per customer (prompt
+  caching) so Claude only reasons about what differs from that customer's
+  known-good template; Haiku triage + Batch API for the huge ones. MVP first:
+  dumb full-text on-demand parse; add the diff layer only if cost/latency bites.
+- **SCOUT → HANDOFF durable handoff.** SCOUT has no DB. HANDOFF freezes
+  `bid_snapshot` at handoff-open (covers "Procore note overwritten later"); a
+  proper SCOUT push into a `bid_context` table would make HANDOFF's DB the
+  durable record for everything the estimator captured.
+- **Deeper scope-draft context** — margin %, labour hours, cost/sales and the
+  estimate Notes from the Estimating tool, once its REST surface is confirmed.
+- **Procore SSO** — accept the current Procore user's identity in the embedded
+  iframe instead of a separate Einbau ID login (suite-wide change).
 
 ## Verification
 
