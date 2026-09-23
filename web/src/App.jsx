@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { getStoredToken, verify, logout as doLogout } from "./auth.js";
-import { api } from "./api.js";
+import { api, setUnauthorizedHandler } from "./api.js";
 import { applyAccentPreset } from "./accentPresets.js";
 import Header from "./components/Header.jsx";
 import LoginScreen from "./components/LoginScreen.jsx";
@@ -79,6 +79,15 @@ export default function App() {
     setActor(null);
     setAuthState("out");
   }
+
+  // A dead session (force-logout, archived user, natural expiry) needs to send
+  // the app back to the login screen, not just fail whatever call was in
+  // flight — api.js calls this on every 401. Registering the same handleLogout
+  // the Log out button uses means the accent-reset it already does comes along
+  // for free, so there's nothing extra to keep in sync here.
+  useEffect(() => {
+    setUnauthorizedHandler(handleLogout);
+  }, []);
 
   // Every shell wraps its content so the compact/full-embed CSS can scope off it.
   const shellClass = SHELL.sidebar ? "sidebar-mode" : SHELL.embed ? "embed-mode" : null;

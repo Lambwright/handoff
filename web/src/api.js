@@ -9,6 +9,17 @@ class UnauthorizedError extends Error {
   }
 }
 
+// A dead session (force-logout, archived user, natural expiry) previously just
+// surfaced a raw error wherever the failing call happened to be — nothing sent
+// the app back to the login screen. Rather than add `.unauthorized` checks at
+// every one of the ~25 call sites below (easy to miss on the next one), request()
+// calls this single hook on every 401; App.jsx registers it once, pointed at the
+// same handleLogout the Log out button uses.
+let onUnauthorized = null;
+export function setUnauthorizedHandler(fn) {
+  onUnauthorized = fn;
+}
+
 async function request(path, { method = "GET", body, headers, formData } = {}) {
   const token = getStoredToken();
   const res = await fetch(`${API_BASE}${path}`, {
@@ -27,6 +38,7 @@ async function request(path, { method = "GET", body, headers, formData } = {}) {
   if (res.status === 401) {
     clearToken();
     const data = await res.json().catch(() => ({}));
+    onUnauthorized?.();
     throw new UnauthorizedError(data.reason);
   }
 
