@@ -138,6 +138,11 @@ so confirming each is a single-file change).
   estimate Notes from the Estimating tool, once its REST surface is confirmed.
 - **Procore SSO** — accept the current Procore user's identity in the embedded
   iframe instead of a separate Einbau ID login (suite-wide change).
+- **Default T&M invoicing rates.** Somewhere for PMs/Estimators to set default
+  T&M invoicing rates that LEDGER (billing/reconciliation sibling app) adopts
+  as its source of truth. Not scoped yet — owner (HANDOFF vs. LEDGER),
+  granularity (per customer/region/project vs. a company-wide default), and
+  the read path (shared table vs. API) are all open.
 
 ## Verification
 
