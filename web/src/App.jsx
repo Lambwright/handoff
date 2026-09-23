@@ -51,7 +51,7 @@ export default function App() {
         return;
       }
       setUser(data.user);
-      if (data.user.themeAccent) applyAccentPreset(data.user.themeAccent);
+      if (data.user.themeAccent?.HANDOFF) applyAccentPreset(data.user.themeAccent.HANDOFF);
       api
         .me()
         .then((meData) => {
