@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getStoredToken, verify, logout as doLogout } from "./auth.js";
 import { api } from "./api.js";
+import { applyAccentPreset } from "./accentPresets.js";
 import Header from "./components/Header.jsx";
 import LoginScreen from "./components/LoginScreen.jsx";
 import Dashboard from "./components/Dashboard.jsx";
@@ -50,6 +51,7 @@ export default function App() {
         return;
       }
       setUser(data.user);
+      if (data.user.themeAccent) applyAccentPreset(data.user.themeAccent);
       api
         .me()
         .then((meData) => {
@@ -72,6 +74,7 @@ export default function App() {
   }
   function handleLogout() {
     doLogout();
+    applyAccentPreset(null);
     setUser(null);
     setActor(null);
     setAuthState("out");
