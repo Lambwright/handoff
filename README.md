@@ -143,6 +143,17 @@ so confirming each is a single-file change).
   as its source of truth. Not scoped yet — owner (HANDOFF vs. LEDGER),
   granularity (per customer/region/project vs. a company-wide default), and
   the read path (shared table vs. API) are all open.
+- **Travel billing rules.** Per diem rate, mileage rate, and whether travel
+  time is billable — all client-billable and currently undefined anywhere.
+  May arrive via timesheets (fastest to track/bill), DCs, or sub invoices, and
+  sometimes a combination. Not scoped — same open questions as T&M rates
+  (owner, granularity, LEDGER read path).
+- **Currency.** A custom currency field already exists on the admin pages
+  (CAD/USD only). Not yet wired into anything downstream of HANDOFF — needs
+  confirming whether LEDGER/billing actually consumes it.
+- **Default project-level markup/margin at the handoff gate.** Not built —
+  would need a spot in the gate (or admin) to set a default markup/margin per
+  project, presumably feeding LEDGER same as the T&M rates above.
 
 ## Verification
 
