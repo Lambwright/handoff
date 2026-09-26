@@ -16,7 +16,15 @@ function timeAgo(iso) {
 // has ~4,200 records, so a background scan keeps the cache warm — 6h cron plus
 // this screen's Refresh button). Opening a handoff pulls the bid's data into
 // HANDOFF's own DB; nothing is created in Procore here.
-export default function BidPicker() {
+// openBidId: a Procore Bid Board ID to open immediately, e.g. from CRM's
+// "Start Handoff" link (`#/bids?open=<bid_id>`) — CRM already resolves the
+// bid to this exact ID (its own `procore_bid_board_id`), the same one
+// openHandoff() is idempotent on, so this either resumes an in-progress
+// handoff or starts a new one, matching exactly what clicking the bid in
+// this list already does. Falls straight to the API rather than requiring
+// the bid to already be in `bids` (the cache), since openHandoff's own
+// getBidRecord() already has a direct-fetch fallback for an uncached bid.
+export default function BidPicker({ openBidId } = {}) {
   const [bids, setBids] = useState([]);
   const [refreshedAt, setRefreshedAt] = useState(null);
   const [scanInProgress, setScanInProgress] = useState(false);
@@ -24,6 +32,18 @@ export default function BidPicker() {
   const [error, setError] = useState(null);
   const [opening, setOpening] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    if (!openBidId) return;
+    setOpening(openBidId);
+    setError(null);
+    api.openHandoff(openBidId)
+      .then(({ project_id }) => { window.location.hash = `#/project/${project_id}/gate`; })
+      .catch((e) => { setError(e.message); setOpening(null); });
+    // openBidId only ever matters on the initial load of this deep link —
+    // deliberately not re-running if it changes without a full navigation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function load() {
     return api

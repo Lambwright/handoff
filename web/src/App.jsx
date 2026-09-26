@@ -22,7 +22,7 @@ function parseHash(hash) {
   if ((m = h.match(/^\/project\/([^/]+)\/gate$/))) return { view: "gate", id: m[1] };
   if ((m = h.match(/^\/project\/([^/]+)\/assignment$/))) return { view: "assignment", id: m[1] };
   if ((m = h.match(/^\/project\/([^/]+)\/brief$/))) return { view: "brief", id: m[1] };
-  if (h === "/bids") return { view: "bids" };
+  if ((m = h.match(/^\/bids(?:\?(.*))?$/))) return { view: "bids", openBidId: new URLSearchParams(m[1] || "").get("open") || null };
   if (h === "/admin") return { view: "admin" };
   return { view: "dashboard" };
 }
@@ -157,7 +157,7 @@ export default function App() {
       <Header user={user} actor={actor} currentHash={window.location.hash || "#/"} onLogout={handleLogout} embed={SHELL.embed} />
       <div className="container">
         {route.view === "dashboard" && <Dashboard actor={actor} />}
-        {route.view === "bids" && <BidPicker />}
+        {route.view === "bids" && <BidPicker openBidId={route.openBidId} />}
         {route.view === "gate" && <PurgatoryGate projectId={route.id} />}
         {route.view === "assignment" && <Assignment projectId={route.id} />}
         {route.view === "brief" && <HandoffBrief projectId={route.id} />}
