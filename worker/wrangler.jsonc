@@ -52,6 +52,15 @@
 		{
 			"binding": "AUTH_WORKER",
 			"service": "auth"
+		},
+		// CRM has no Procore access of its own (2026-09 decision — see its
+		// kickoff prompt "Procore access"): rather than stand up a second
+		// independent Procore scanner and risk repeating the rate-limit lockout
+		// this account hit once already, the Bid Board scan this Worker already
+		// runs (bids.js refreshBidCache) also pushes every row's status to CRM.
+		{
+			"binding": "CRM_WORKER",
+			"service": "crm-worker"
 		}
 	],
 	// Housed handoff documents (PO doc, tender correspondence) before they're
@@ -69,5 +78,6 @@
 	 *   HANDOFF_SERVICE_KEY   - shared secret for non-browser callers (cron-issued internal calls)
 	 *   PROCORE_CLIENT_ID     - HANDOFF's own Procore data-connection client id (client_credentials)
 	 *   PROCORE_CLIENT_SECRET - HANDOFF's own Procore data-connection client secret
+	 *   CRM_SYNC_KEY          - shared secret sent to crm-worker as X-Crm-Sync-Key when pushing a Bid Board sync batch
 	 */
 }

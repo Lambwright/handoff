@@ -7,6 +7,11 @@
 // scan is incremental + resumable (see refreshBidCache): each cron tick does a
 // full pass, and POST /bids/refresh advances it a bounded chunk at a time.
 // GET /bids just reads `bid_cache`.
+//
+// Every row scanned (not just the Awarded-and-not-handed-off subset this file
+// caches) also gets pushed to CRM (syncRowsToCrm) so it can keep its own
+// `stage` in sync with Procore's real Bid Board without ever calling Procore
+// itself — see crm-worker's kickoff prompt "Procore access" (2026-09).
 
 import { json } from "./http.js";
 import { procoreFetch } from "./procore.js";
@@ -22,6 +27,35 @@ const BID_SCAN_PER_PAGE = 100;
 // A fresh full pass restarts if the in-progress one hasn't advanced in this long
 // (a scan that died mid-way shouldn't wedge the state forever).
 const SCAN_RESUME_STALE_MIN = 20;
+
+// Pushes this invocation's scanned rows to CRM (see crm-worker's
+// handleProcoreSync) so it can reconcile its own `stage` without ever calling
+// Procore itself — see wrangler.jsonc's CRM_WORKER binding comment. Every row
+// scanned goes, not just the Awarded-and-not-handed-off subset upsertBidRow
+// cares about, since CRM tracks a bid's whole lifecycle (RFQ through Lost),
+// not just the handoff moment. Best-effort: never blocks or fails the scan
+// itself if CRM is briefly unreachable.
+async function syncRowsToCrm(env, rows) {
+  if (!rows.length || !env.CRM_SYNC_KEY) return;
+  try {
+    const res = await env.CRM_WORKER.fetch("https://crm-worker.ben-a90.workers.dev/internal/procore-sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Crm-Sync-Key": env.CRM_SYNC_KEY },
+      body: JSON.stringify({
+        rows: rows.map((b) => ({
+          id: b.id,
+          status: b.status,
+          archived: b.archived,
+          name: b.name,
+          customer_name: b.customer_company?.name || null,
+        })),
+      }),
+    });
+    if (!res.ok) console.log("CRM sync push failed:", res.status, await res.text().catch(() => ""));
+  } catch (e) {
+    console.log("CRM sync push failed:", e.message);
+  }
+}
 
 async function upsertBidRow(sql, bid, runId) {
   const d = BID_BOARD.toDraft(bid);
@@ -62,6 +96,7 @@ export async function refreshBidCache(env, sql, { maxPages = BID_SCAN_MAX_PAGES 
   const path = BID_BOARD.listPath(env.PROCORE_COMPANY_ID);
   let page = startPage;
   let complete = false;
+  const scannedForCrm = [];
   for (let i = 0; i < maxPages && page <= BID_SCAN_MAX_PAGES; i++, page++) {
     const { ok, status, data } = await procoreFetch(env, path, {
       version: BID_BOARD.version,
@@ -75,7 +110,10 @@ export async function refreshBidCache(env, sql, { maxPages = BID_SCAN_MAX_PAGES 
       break;
     }
 
-    for (const b of rows) if (BID_BOARD.isReadyToHandOff(b)) await upsertBidRow(sql, b, runId);
+    for (const b of rows) {
+      if (BID_BOARD.isReadyToHandOff(b)) await upsertBidRow(sql, b, runId);
+      scannedForCrm.push(b);
+    }
     await sql`update bid_scan_state set last_page = ${page}, updated_at = now() where singleton = 1`;
   }
   if (page > BID_SCAN_MAX_PAGES) complete = true;
@@ -84,6 +122,7 @@ export async function refreshBidCache(env, sql, { maxPages = BID_SCAN_MAX_PAGES 
     await sql`delete from bid_cache where run_id is distinct from ${runId}`;
     await sql`update bid_scan_state set last_page = 0, full_pass_completed_at = now(), updated_at = now() where singleton = 1`;
   }
+  await syncRowsToCrm(env, scannedForCrm);
   return { pagesScanned: page - startPage, complete };
 }
 
