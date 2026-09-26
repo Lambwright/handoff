@@ -66,8 +66,10 @@ care which brought the estimator here:
   INTAKE already uses as a SCOUT popout (`scout-intake/README.md`): the host
   posts `{token, bidId}`, HANDOFF verifies the token against `/auth/verify`
   and deep-links straight to that bid's gate, skipping its own login/picker
-  screens. Not built yet since LEDGER's sidebar doesn't exist to integrate
-  against — tracked here so it isn't lost.
+  screens. Not built yet. LEDGER's Procore sidebar now exists
+  (`ledger-sidebar.pages.dev`, repo `lambwright/ledger`, `frontend/src/procore.js`
+  for the side-panel handshake), so there's something to integrate against;
+  tracked here so it isn't lost.
 - **Recommended operational step, either way**: Ben confirmed Einbau can
   revoke estimators' native Procore permission to push a bid to the Portfolio
   without reducing anything else they need — worth flipping once HANDOFF is
@@ -138,11 +140,26 @@ so confirming each is a single-file change).
   estimate Notes from the Estimating tool, once its REST surface is confirmed.
 - **Procore SSO** — accept the current Procore user's identity in the embedded
   iframe instead of a separate Einbau ID login (suite-wide change).
-- **Default T&M invoicing rates.** Somewhere for PMs/Estimators to set default
-  T&M invoicing rates that LEDGER (billing/reconciliation sibling app) adopts
-  as its source of truth. Not scoped yet — owner (HANDOFF vs. LEDGER),
-  granularity (per customer/region/project vs. a company-wide default), and
-  the read path (shared table vs. API) are all open.
+- **Default T&M invoicing rates → LEDGER (ready on LEDGER's side, 2026-09-26).**
+  LEDGER owns the rates: a company default plus a per-project override for
+  each time type, with no region (Ben's decision). A PM can already edit them
+  in LEDGER → Project Settings. What's left is for HANDOFF to set a new
+  project's rates at creation, right after the Procore project exists:
+  - **Call:** `POST https://ledger.ben-a90.workers.dev/` with JSON
+    `{"action":"set_project_rates","tenant_id":"<Procore company id>","project_id":"<new Procore project id>","user_id":"handoff","rates":{"regular":85,"overtime":127.5,"double_time":170,"per_diem":50}}`.
+    Only the time types you send are touched (`null` clears one back to the
+    company rate), so it never wipes a PM's other LEDGER settings. The
+    response echoes the project's rates, e.g.
+    `{"rates":{"regular":{"company":80,"project":85},...}}`.
+  - **Auth:** header `X-Ledger-Service-Key: <LEDGER_SERVICE_KEY>`. Ben sets it
+    as a secret on handoff-worker with `wrangler secret put LEDGER_SERVICE_KEY`
+    (same value as on the `ledger` worker).
+  - **Must use a service binding.** A plain `fetch()` from one worker to
+    another `*.workers.dev` URL on this account fails with Cloudflare error
+    1042. Add `[[services]] binding = "LEDGER", service = "ledger"` and call
+    `env.LEDGER.fetch("https://ledger.ben-a90.workers.dev/", {...})`.
+  - **Where the numbers come from** (estimate, customer, region) is HANDOFF's
+    call. Company defaults today are $80 / $120 / $160 / $50.
 - **Travel billing rules.** Per diem rate, mileage rate, and whether travel
   time is billable — all client-billable and currently undefined anywhere.
   May arrive via timesheets (fastest to track/bill), DCs, or sub invoices, and
@@ -153,7 +170,10 @@ so confirming each is a single-file change).
   confirming whether LEDGER/billing actually consumes it.
 - **Default project-level markup/margin at the handoff gate.** Not built —
   would need a spot in the gate (or admin) to set a default markup/margin per
-  project, presumably feeding LEDGER same as the T&M rates above.
+  project, presumably feeding LEDGER same as the T&M rates above. LEDGER
+  already stores separate direct-cost and commitment markup defaults per
+  project (Project Settings), but has no partial "set markup only" call yet.
+  Ask LEDGER for one when this gets built, like `set_project_rates`.
 
 ## Verification
 
