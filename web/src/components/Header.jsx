@@ -1,18 +1,29 @@
 import { useEffect, useRef, useState } from "react";
 
-// Same suite app-switcher the other apps carry (ported from TALLY's, which
-// ported it from scout-intake's).
-function appLinks() {
-  return [
-    { name: "PUNCH", url: "https://lambwright.github.io/PUNCH/" },
-    { name: "SCOUT", url: "https://lambwright.github.io/scout-addin/app.html" },
-    { name: "INTAKE", url: "https://lambwright.github.io/scout-intake/" },
-    { name: "TALLY", url: "https://lambwright.github.io/tally/" },
-    { name: "HANDOFF", url: "https://lambwright.github.io/handoff/", current: true },
-    { name: "LEDGER", url: "https://lambwright.github.io/ledger/" },
-    { name: "HELM", url: "https://lambwright.github.io/helm/" },
-    { name: "CRM", url: "https://lambwright.github.io/crm/" },
-  ];
+// Same suite switcher every other app carries — keep the list and the
+// visibility rule below identical across apps.
+const APP_LINKS = [
+  { name: "PUNCH", url: "https://lambwright.github.io/PUNCH/" },
+  { name: "SCOUT", url: "https://lambwright.github.io/scout-addin/app.html" },
+  { name: "INTAKE", url: "https://lambwright.github.io/scout-intake/" },
+  { name: "TALLY", url: "https://lambwright.github.io/tally/" },
+  { name: "HANDOFF", url: "https://lambwright.github.io/handoff/" },
+  { name: "LEDGER", url: "https://lambwright.github.io/ledger/" },
+  { name: "CRM", url: "https://lambwright.github.io/crm/" },
+];
+const HELM_LINK = { name: "HELM", url: "https://lambwright.github.io/helm/" };
+const CURRENT_APP = "HANDOFF";
+
+// Only apps this user can open, then HELM always last (it's where settings
+// live). `user.apps` absent = unrestricted, except LEDGER, which fails closed
+// and needs an explicit grant (see auth-worker/README.md).
+function appLinks(user) {
+  const apps = Array.isArray(user?.apps) ? user.apps.map((a) => String(a).toUpperCase()) : null;
+  const allowed = (name) => (apps ? apps.includes(name) : name !== "LEDGER");
+  return [...APP_LINKS.filter((a) => a.name === CURRENT_APP || allowed(a.name)), HELM_LINK].map((a) => ({
+    ...a,
+    current: a.name === CURRENT_APP,
+  }));
 }
 
 const NAV = [
@@ -59,7 +70,7 @@ export default function Header({ user, actor, currentHash, onLogout, embed = fal
           {!embed && <span className="header-brand-tag">An Einbau Product</span>}
           {open && !embed && (
             <div className="app-switcher-menu">
-              {appLinks().map((app) => (
+              {appLinks(user).map((app) => (
                 <a className={`app-switcher-item${app.current ? " current" : ""}`} href={app.url} key={app.name}>
                   {app.name}
                 </a>
