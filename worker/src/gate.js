@@ -174,7 +174,24 @@ export async function draftScopeSummary({ params, env, sql }) {
   if (project.procore_project_id) {
     const { ok, data } = await procoreFetch(env, EMAIL_TOOL.listPath(project.procore_project_id), { version: EMAIL_TOOL.version });
     if (ok && Array.isArray(data?.emails)) {
-      emails = data.emails.slice(0, 15).map((e) => ({ subject: e.subject, sent_at: e.email_sent_at, snippet: (e.body || "").replace(/<[^>]+>/g, " ").slice(0, 800) }));
+      // Chronological (oldest first) so the draft reads the tender conversation in the
+      // order it actually happened, not whatever order Procore's API returns it in.
+      const sorted = [...data.emails].sort((a, b) => new Date(a.email_sent_at || 0) - new Date(b.email_sent_at || 0));
+      // Bounded by total chars, not just count/per-email length — a handful of long
+      // emails shouldn't get truncated to the same 800 chars as a one-line reply, but
+      // the combined prompt still needs a ceiling on cost/latency regardless of how
+      // many emails or how long they are. ~60k chars is comfortably inside Sonnet's
+      // context window with room for the bid/estimate context alongside it.
+      const CHAR_BUDGET = 60_000;
+      let used = 0;
+      for (const e of sorted) {
+        const body = (e.body || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+        const snippet = body.slice(0, CHAR_BUDGET - used);
+        if (!snippet) break;
+        emails.push({ subject: e.subject, sent_at: e.email_sent_at, snippet });
+        used += snippet.length;
+        if (used >= CHAR_BUDGET) break;
+      }
     }
   }
 
