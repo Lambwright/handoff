@@ -51,6 +51,44 @@ shape every file in this repo:
   `notifications` row and shown in the UI; nothing is actually sent yet. See
   `worker/README.md`.
 
+## Coming change: Einbau ID role matrix
+
+Einbau ID is moving from each app owning its own `admin`/`user` split to a
+suite-wide model: company job roles (Super Admin / Admin / Estimator / PM /
+Project Coordinator / CRM / Accounting / Logistics) plus a per-app matrix,
+edited in HELM by Ben only, mapping each job role to a level in each app.
+HANDOFF is the app most affected — signed off by Ben, relayed via a
+cross-session message from the HELM/auth session (2026-09-30). **Not built
+yet** — recorded here so it isn't lost, and kept current as it lands.
+
+- HANDOFF's levels become: `admin`, `estimator`, `assignment` is going away
+  (folds into `admin` — no route changes needed, `admin` already bypasses
+  every `roles[]` check in `requireRole`), `pm` (NEW: also finalizes any gate
+  fields the estimator left missing), and a new `viewer` (read-only —
+  projects/briefs, no gate edits, no handoffs, no PM assignment).
+- `auth-worker`'s `/auth/verify` will add `user.appRoles` (computed level per
+  app, e.g. `{HANDOFF: "pm"}`) and `user.jobRole` (informational); `user.role`
+  becomes legacy (`admin` only for the Super Admin post-switch).
+- **HANDOFF's own `users` table stops being the source of truth for role.**
+  It currently does double duty — per-request auth AND the queryable PM
+  roster (`assignment.js`'s workload aggregation runs `where role='pm' and
+  active and procore_department_id is not null` directly against this
+  table). Swapping auth to `appRoles.HANDOFF` is easy; giving HANDOFF a way
+  to enumerate "who currently has pm-level HANDOFF access" for that roster
+  query is the one real open question — flagged back to the HELM session,
+  not yet answered.
+- The one HANDOFF-specific field besides role that has to survive the
+  switch: `procore_department_id`/`procore_department_name` (the PM →
+  Procore Department mapping — Einbau's own Department list mixes departed
+  staff and non-person buckets, so this curated mapping has no home anywhere
+  else). Plan is a HANDOFF-local table keyed by `einbau_username` holding
+  just that.
+- Also flagged back: `PATCH /gate-tasks/:id` and `POST
+  /gate-tasks/:id/verify` are currently `roles: []` — open to *any*
+  authenticated HANDOFF actor today, and `GapResolution.jsx` has no
+  client-side role gate either. That needs real gating added as part of the
+  switch, or `viewer` will retain gate-edit access by accident.
+
 ## Rollout: how estimators actually reach HANDOFF
 
 Two entry points, one API — `bids.js`'s `GET /bids` / `POST /handoffs` don't
