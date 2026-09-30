@@ -7,7 +7,7 @@ import { runCreatePipeline, verifyBackedTask, pushOneDocument, FIELD_PUSHERS } f
 import { isPostCreation } from "./checklist.js";
 import { callClaude } from "./claude.js";
 import { procoreFetch } from "./procore.js";
-import { EMAIL_TOOL } from "./procore-shapes.js";
+import { EMAIL_TOOL, BID_BOARD } from "./procore-shapes.js";
 
 async function loadProjectAndTasks(sql, projectId) {
   const [project] = await sql`select * from projects where id = ${projectId}`;
@@ -162,13 +162,25 @@ export async function uploadGateDocument({ params, request, env, sql, auth }, do
 }
 
 // POST /projects/:id/scope-draft — AI-draft the scope summary from whatever
-// context HANDOFF can reach: the bid record, and (once the project exists) the
-// tender emails forwarded into Procore's Emails tool.
-// TODO(sandbox): also pull SCOUT's notes for the bid and the project-level
-// Estimating tool's line items — both need their REST surfaces confirmed first.
+// context HANDOFF can reach: the bid record, its Procore notes, and (once the
+// project exists) the tender emails forwarded into Procore's Emails tool.
+// TODO(sandbox): the project-level Estimating tool's line items/margin/hours
+// still isn't reachable — see procore-shapes.js's ESTIMATING comment. Bid
+// drawings have no confirmed API path either (same file, BID_BOARD) — those
+// arrive via the gate's manual upload instead, not this draft.
 export async function draftScopeSummary({ params, env, sql }) {
   const [project] = await sql`select * from projects where id = ${params.id}`;
   if (!project) return json({ error: "not_found" }, 404);
+
+  const bid = project.bid_snapshot || {};
+
+  let bidNotes = [];
+  if (bid.id) {
+    const { ok, data } = await procoreFetch(env, BID_BOARD.notesPath(env.PROCORE_COMPANY_ID, bid.id), { version: BID_BOARD.notesVersion });
+    if (ok && Array.isArray(data?.data)) {
+      bidNotes = data.data.map((n) => n.value).filter(Boolean);
+    }
+  }
 
   let emails = [];
   if (project.procore_project_id) {
@@ -195,7 +207,6 @@ export async function draftScopeSummary({ params, env, sql }) {
     }
   }
 
-  const bid = project.bid_snapshot || {};
   let draft = "";
   try {
     draft = await callClaude(env, {
@@ -205,14 +216,14 @@ export async function draftScopeSummary({ params, env, sql }) {
         "Use only the material given. If it's thin, say what's known and flag what's missing — do not invent scope. 4-8 sentences, plain prose, no bullet markup.",
       userMessage: JSON.stringify({
         project: { name: project.name, type: project.project_type, customer: project.customer?.name, address: project.address },
-        bid: { name: bid.name, description: bid.description, estimate_total: bid.stats?.total },
+        bid: { name: bid.name, description: bid.description, estimate_total: bid.stats?.total, notes: bidNotes },
         tender_emails: emails,
       }),
     });
   } catch (e) {
     draft = `(AI draft unavailable: ${e.message})`;
   }
-  return json({ draft, context: { tender_email_count: emails.length } });
+  return json({ draft, context: { tender_email_count: emails.length, bid_note_count: bidNotes.length } });
 }
 
 function gateIsComplete(tasks) {

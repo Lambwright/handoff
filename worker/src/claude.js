@@ -3,7 +3,7 @@
 //
 // Model matches the rest of the suite (proven working on this Anthropic key in
 // scout-worker / tally-worker). Bump when the suite moves.
-export const MODEL = "claude-sonnet-4-6";
+export const MODEL = "claude-sonnet-5";
 export const HAIKU_MODEL = "claude-haiku-4-5-20251001";
 
 export async function callClaude(env, { model = MODEL, system, messages, userMessage, maxTokens = 2000 }) {
@@ -22,7 +22,9 @@ export async function callClaude(env, { model = MODEL, system, messages, userMes
     }),
   });
   if (!res.ok) {
-    throw new Error(`Anthropic API error: ${res.status} ${await res.text()}`);
+    const bodyText = await res.text();
+    console.error("Anthropic API error", res.status, bodyText);
+    throw new Error(`Anthropic API error: ${res.status} ${bodyText}`);
   }
   const data = await res.json();
   const textBlock = data.content.find((b) => b.type === "text");

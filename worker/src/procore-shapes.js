@@ -50,6 +50,32 @@ export const BID_BOARD = {
     return BID_BOARD.isAwarded(bid) && !bid.project_id;
   },
 
+  // CONFIRMED live 2026-09-29 (probed against a real bid via /admin/procore-probe).
+  // A real sub-resource, unlike most guesses on this record — Response envelope
+  // { "data": [ {id, updated_at, value} ] }, `value` being the free-text note body
+  // (in practice, whatever gets pasted in — CRM follow-ups, estimator remarks, no
+  // fixed shape). This is the closest thing to durable SCOUT/estimator context
+  // HANDOFF can reach without the parked SCOUT->HANDOFF push (see root README) —
+  // richer than `bid.description`, which is the only other free-text field on the
+  // bid record itself.
+  notesPath: (companyId, bidId) => `/companies/${companyId}/estimating/bid_board_projects/${bidId}/notes`,
+  notesVersion: "v2.0",
+
+  // NO per-bid drawings/documents path exists — probed 2026-09-29. Every
+  // bid_board_projects/{id} sub-resource guess 404'd (/documents, /attachments,
+  // /files, /media, /estimate_documents, /tender_documents). The company-wide
+  // generic Documents tool (`GET /rest/v1.0/companies/{co}/documents`) DOES
+  // respond, but its `filterable_id`/`filterable_type=bid_board_project` query
+  // params are silently ignored (same footgun as the Bid Board's own ignored
+  // filters) — it just returns the whole unscoped company document library
+  // (safety talks, HMMS, warranty templates, ...), not this bid's files. So
+  // there is no confirmed way to programmatically fetch "this bid's drawings".
+  // Per Ben (2026-09-29): drawings at this stage live in Procore's estimate
+  // documents folder OR locally on an estimator's own machine — i.e. even if
+  // the API gap were solved, the local-file case still needs a manual upload
+  // path. Gate-side manual upload (same R2 pattern as po_document) covers both
+  // cases uniformly; don't spend more time guessing at an auto-pull path here.
+
   // Structured field copy — NO document parsing (Ben). `project_type` and a
   // real start/end timeline are NOT on the bid record, so they're left null
   // for the estimator to set in the gate (checklist.js defaults type to
@@ -435,11 +461,18 @@ export const EMAIL_TOOL = {
 // Project-level Estimating tool (cost / labour hours / margin for the brief)
 // ---------------------------------------------------------------------------
 export const ESTIMATING = {
-  // TODO(sandbox): the guessed path below returned 404 on probe 2026-09-05
-  // (v2.0). Still need to find the real REST surface for the project-level
-  // Estimating tool's Summary view — likely also gated behind the same
-  // Estimating permission that's currently blocking the Bid Board, so re-probe
-  // once that's granted. This data never has to leave Procore (sidesteps the
+  // TODO(sandbox): still unconfirmed. Re-probed 2026-09-29 against a real bid
+  // (Bid Board permission is granted now, so that's not what's blocking this) —
+  // every guessed sub-resource on bid_board_projects/{id} 404'd: /estimate,
+  // /summary, /line_items, /cost_items, /cost_types, /wbs_items, /bid_items.
+  // The single bid record itself (GET bid_board_projects/{id}) carries no cost
+  // breakdown beyond stats.total — no margin/hours/line-items fields at all.
+  // Strong signal the line-item/cost/margin/hours data Ben sees in Procore's UI
+  // lives in a genuinely different API surface than this "estimating" v2.0
+  // namespace (bid_board_projects is Procore's pipeline-tracker view, not
+  // necessarily the same product as the "Estimating" tool with cost rows) —
+  // worth asking Ben what tool/tab he's actually looking at before guessing
+  // more paths blind. This data never has to leave Procore (sidesteps the
   // SCOUT->NetSuite write-leg risk).
   summaryPath: (projectId) => `/projects/${projectId}/estimating/summary`,
   version: "v2.0",
