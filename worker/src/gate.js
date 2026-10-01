@@ -78,7 +78,23 @@ export async function patchGateTask({ params, request, env, sql, auth }) {
   else if (task.task_type === "timezone") projectPatch = sql`update projects set timezone = ${v?.name ?? v}, updated_at = now() where id = ${task.project_id} returning *`;
 
   if (projectPatch) {
-    const [freshProject] = await projectPatch;
+    // The gate_tasks row above was already marked 'complete' as the first write —
+    // if this mirror patch throws (e.g. a schema drift like the missing
+    // timezone/region_id columns hit live 2026-10-01), that 'complete' status was
+    // already committed and would otherwise sit there lying about whether the
+    // value actually landed on the project row. Roll it back to verify_failed
+    // with the real error instead of leaving a false-green task.
+    let freshProject;
+    try {
+      [freshProject] = await projectPatch;
+    } catch (e) {
+      [updated] = await sql`
+        update gate_tasks
+        set status = 'verify_failed', verify_note = ${`save failed: ${e.message}`.slice(0, 500)}
+        where id = ${params.id}
+        returning *`;
+      return json({ task: updated, error: "save_failed", detail: e.message }, 500);
+    }
 
     if (postCreation && FIELD_PUSHERS[task.task_type]) {
       const pushError = await FIELD_PUSHERS[task.task_type](env, sql, freshProject, { force: true });
