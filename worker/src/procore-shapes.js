@@ -75,6 +75,18 @@ export const BID_BOARD = {
   // the API gap were solved, the local-file case still needs a manual upload
   // path. Gate-side manual upload (same R2 pattern as po_document) covers both
   // cases uniformly; don't spend more time guessing at an auto-pull path here.
+  //
+  // UPDATE 2026-10-01: this dead end is PRE-creation only (bid stage). POST-
+  // creation, once a real Portfolio project exists, punch-worker proves a real
+  // read path live: `GET /rest/v1.0/projects/{project_id}/documents` returns
+  // the top-level folder list, then `GET /rest/v1.0/folders/{folder.id}
+  // ?project_id={projectId}` returns that folder's files. Einbau's own standard
+  // project folder names (confirmed live): "02b IFC Drawings-Shop Drawings" and
+  // "03 Quotes-P.O". So HANDOFF could auto-pull whatever's already in those
+  // folders for context once the project is created — matches the timing
+  // scope_summary already runs at (post_creation). Not wired in yet. Write-side
+  // (uploading a document) is still unconfirmed anywhere in the suite —
+  // punch-worker only ever reads documents, never uploads one.
 
   // Structured field copy — NO document parsing (Ben). `project_type` and a
   // real start/end timeline are NOT on the bid record, so they're left null
@@ -520,23 +532,65 @@ export const ESTIMATING = {
 
 // ---------------------------------------------------------------------------
 // Resource Planning (first startup task)
+//
+// CORRECTED 2026-10-01 from punch-worker's proven live code — the original
+// guess here (a "request" with start/end dates + notes posted to
+// /resource_planning/requests) was wrong on every count. There is no
+// "request" concept in Resource Planning at all. What actually exists, and
+// is proven live in punch-worker's setRpProjectManager/fetchRpPersonByName:
+//
+// - RP is a distinct API namespace on the SAME host/auth as the rest of
+//   Procore (`${PROCORE_API_BASE}/rest/v1.0/workforce-planning/v2`) — no new
+//   credential needed, but every call needs the Procore-Company-Id header
+//   (same as elsewhere).
+// - RP has its OWN "people" roster, with no shared id against Procore
+//   Directory users or the Department dropdown HANDOFF's assignment step
+//   already uses. Resolving a PM to their RP person_id means fetching
+//   `/companies/{co}/people` (confirmed: ~850 people company-wide incl. every
+//   subcontractor crew, flat first_name/last_name, NOT paginated, NOT safe to
+//   query-filter by name — exact-match only, and real records have real mess
+//   like a trailing space in "Chris Hong"'s first_name) and token-matching
+//   client-side, same as punch-worker's fetchRpPersonByName.
+// - Assigning a PM is a ROLE, not a request: POST
+//   `/companies/{co}/projects/{rpProjectId}/roles` with
+//   `{person_id, job_title_id}`. RP_PROJECT_MANAGER_JOB_TITLE_ID below is
+//   confirmed stable company-wide (verified across two different people's
+//   live assignments).
+// - No update endpoint — only add/remove. Changing the PM means DELETE the
+//   existing role (`/companies/{co}/projects/{rpProjectId}/roles/{roleId}`,
+//   requires the role's own id, not just person_id) then POST the new one.
+// - The RP project itself isn't the same id as the Portfolio project —
+//   resolve it via `GET /companies/{co}/projects?project_number=<num>`.
+//
+// NOT YET wired into startup.js — this is a real rework (person-matching +
+// role add/delete + the RP-project lookup), not a one-line fix. Flagged, not
+// built, pending a decision on scope/priority.
 // ---------------------------------------------------------------------------
 export const RESOURCE_PLANNING = {
-  // TODO(sandbox): confirm the Resource Planning "request" endpoint + payload.
-  createRequestPath: () => `/resource_planning/requests`,
+  apiBase: (procoreApiBase) => `${procoreApiBase}/rest/v1.0/workforce-planning/v2`,
   version: "v1.0",
 
-  buildRequest({ companyId, procoreProjectId, timeline, note }) {
-    return {
-      company_id: companyId,
-      request: {
-        project_id: procoreProjectId,
-        start_date: timeline?.start_date || undefined,
-        end_date: timeline?.end_date || undefined,
-        notes: note || undefined,
-      },
-    };
-  },
+  projectManagerJobTitleId: "0351bdff-91e1-4847-945b-b524a61a37eb",
+
+  peoplePath: (companyId) => `/companies/${companyId}/people`,
+  projectByNumberPath: (companyId, projectNumber) => `/companies/${companyId}/projects?project_number=${encodeURIComponent(projectNumber)}`,
+  rolesPath: (companyId, rpProjectId) => `/companies/${companyId}/projects/${rpProjectId}/roles`,
+  roleByIdPath: (companyId, rpProjectId, roleId) => `/companies/${companyId}/projects/${rpProjectId}/roles/${roleId}`,
+};
+
+// Distinct from Resource Planning entirely — Procore's native Project Team/
+// Directory widget. Proven live in punch-worker's setProcoreProjectManagerRole.
+// Company-wide endpoint (no company_id in the path, comes via the
+// Procore-Company-Id header), project scoped via a query param. Same no-update,
+// add/delete-only shape as RP. `role` is a plain company-configured name
+// STRING, not an id — "Project Manager" confirmed as the right one to target
+// (distinct from "Operations Manager", which shows up pre-populated with Ben
+// on every project seen so far — some default/template assignment, unrelated).
+export const PROJECT_ROLES = {
+  version: "v1.0",
+  listPath: (procoreProjectId) => `/project_roles?project_id=${procoreProjectId}`,
+  createPath: () => `/project_roles`,
+  deletePath: (roleId, procoreProjectId) => `/project_roles/${roleId}?project_id=${procoreProjectId}`,
 };
 
 // ---------------------------------------------------------------------------

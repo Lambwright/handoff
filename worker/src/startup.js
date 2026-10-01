@@ -3,26 +3,19 @@
 // idempotent on (project_id, task_type): re-running after a partial failure only
 // retries the tasks that didn't already succeed.
 
-import { procoreFetch } from "./procore.js";
-import { RESOURCE_PLANNING } from "./procore-shapes.js";
-import { handoffTag } from "./util.js";
-
 const STARTUP_TASKS = [
   {
     task_type: "resource_planning_request",
-    async run(env, project) {
-      const { ok, status, data } = await procoreFetch(env, RESOURCE_PLANNING.createRequestPath(), {
-        method: "POST",
-        version: RESOURCE_PLANNING.version,
-        body: RESOURCE_PLANNING.buildRequest({
-          companyId: env.PROCORE_COMPANY_ID,
-          procoreProjectId: project.procore_project_id,
-          timeline: project.timeline,
-          note: `${handoffTag(project.id)} auto-created at handoff for the confirmed project timeline.`,
-        }),
-      });
-      if (!ok) throw new Error(`Resource Planning request failed: HTTP ${status} ${JSON.stringify(data).slice(0, 200)}`);
-      return data;
+    // TODO: the original design (a "request" with timeline/notes) was wrong —
+    // Resource Planning has no request concept. The real mechanism (confirmed
+    // live in punch-worker, documented in procore-shapes.js's RESOURCE_PLANNING)
+    // is resolving the assigned PM to an RP person_id by name-matching against
+    // RP's own ~850-person roster, then adding them as a role on the RP
+    // project. Real rework, not wired yet — fails clearly instead of silently
+    // until it's built, so it shows up in /projects/:id/notifications as a
+    // known gap rather than a confusing crash.
+    async run() {
+      throw new Error("Resource Planning startup task not yet implemented — see procore-shapes.js RESOURCE_PLANNING comment");
     },
   },
 ];
