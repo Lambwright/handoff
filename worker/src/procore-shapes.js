@@ -180,14 +180,20 @@ export const STAGES = {
 //   custom_field_73165           -> {data_type:"vendor", value:{id, label}}   (Customer)
 //   custom_field_562949953929326 -> {data_type:"string", value:"tbd"}         (PO Number)
 //   custom_field_562949953942386 -> {data_type:"lov_entry", value:{id,label}} (Currency, unused here)
+//   custom_field_562949953962855 -> {data_type:"people", value:{id,user_ids}} (PM, front-page field)
 // Reads come back nested under `project.custom_fields.custom_field_<id>.value`;
 // WRITES go as flat project properties (`project.custom_field_<id> = <id|string>`),
 // never nested — confirmed against a real Power Automate flow that hit this
-// exact trap on 2026-04-24.
+// exact trap on 2026-04-24. The PM field is the one exception to "bare scalar":
+// its write value is itself an object, `{id: <fieldId>, user_ids: [<procoreUserId>]}`
+// — confirmed live in punch-worker's syncProjectManagerForDepartment, NOT the same
+// shape as customer/poNumber above.
 // ---------------------------------------------------------------------------
 export const PROCORE_CUSTOM_FIELDS = {
   customer: 73165,
   poNumber: 562949953929326,
+  currency: 562949953942386,
+  pm: 562949953962855,
 };
 
 // ---------------------------------------------------------------------------
@@ -562,13 +568,21 @@ export const ESTIMATING = {
 // - The RP project itself isn't the same id as the Portfolio project —
 //   resolve it via `GET /companies/{co}/projects?project_number=<num>`.
 //
-// NOT YET wired into startup.js — this is a real rework (person-matching +
-// role add/delete + the RP-project lookup), not a one-line fix. Flagged, not
-// built, pending a decision on scope/priority.
+// Per Ben (2026-10-01): this is NOT the same thing as an actual Resource
+// Planning staffing/timeline "request" — that's a separate, genuinely
+// different feature neither punch-worker nor HANDOFF has ever touched, still
+// a real unknown if HANDOFF ever wants it. What's below is specifically the
+// "assign the PM, make the project sortable/searchable by them" sync — now
+// wired into assignment.js's confirmAssignment (see pm-sync.js) alongside
+// HANDOFF's existing Department-field write.
+//
+// version is deliberately the FULL suffix after /rest/ — procoreFetch builds
+// its URL as `${PROCORE_API_BASE}/rest/${version}${path}`, so passing
+// "v1.0/workforce-planning/v2" as `version` lands on the right host without
+// procoreFetch needing to know RP is a distinct namespace.
 // ---------------------------------------------------------------------------
 export const RESOURCE_PLANNING = {
-  apiBase: (procoreApiBase) => `${procoreApiBase}/rest/v1.0/workforce-planning/v2`,
-  version: "v1.0",
+  version: "v1.0/workforce-planning/v2",
 
   projectManagerJobTitleId: "0351bdff-91e1-4847-945b-b524a61a37eb",
 

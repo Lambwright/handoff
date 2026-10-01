@@ -13,6 +13,7 @@ import { callClaude, extractJSON } from "./claude.js";
 import { batched } from "./util.js";
 import { generateBrief } from "./brief.js";
 import { runStartupTasks } from "./startup.js";
+import { syncProjectManager } from "./pm-sync.js";
 
 // ---------------------------------------------------------------------------
 // Pure logic (unit-tested without Procore/DB) — util.js's daysOverlap-style
@@ -235,6 +236,20 @@ export async function confirmAssignment({ params, request, env, sql, auth }) {
     return json({ error: "procore_patch_failed", detail: `HTTP ${status}: ${JSON.stringify(data).slice(0, 300)}` }, 502);
   }
 
+  // The Department field above is HANDOFF's own PM-assignment mechanism. This is
+  // a bonus on top of it, not a replacement: syncs the same PM onto Resource
+  // Planning's role and Procore's native Project Team role, same two systems
+  // punch-worker already keeps in sync for its own checklist writeback, so a
+  // HANDOFF-created project is sortable/searchable by PM the same way. Best-effort
+  // — never blocks the confirm itself, which already succeeded above.
+  const [pmUser] = await sql`select name, procore_department_name from users where procore_department_id = ${body.assigned_pm}`;
+  const pmSync = await syncProjectManager(env, {
+    procoreProjectId: project.procore_project_id,
+    projectNumber: project.project_number,
+    companyId: env.PROCORE_COMPANY_ID,
+    pmName: pmUser?.procore_department_name || pmUser?.name || "",
+  }).catch((e) => ({ error: e.message }));
+
   const [event] = await sql`
     insert into assignment_events (project_id, recommended_pm, recommendation_reasoning, candidates, assigned_pm, overridden, decided_by, decided_at)
     values (${project.id}, ${lastEvent?.recommended_pm || null}, ${lastEvent?.recommendation_reasoning || null},
@@ -253,5 +268,5 @@ export async function confirmAssignment({ params, request, env, sql, auth }) {
     runStartupTasks(env, sql, updatedProject).catch((e) => [{ error: e.message }]),
   ]);
 
-  return json({ event, overridden, brief, startup_tasks: startupResults });
+  return json({ event, overridden, brief, startup_tasks: startupResults, pm_sync: pmSync });
 }
