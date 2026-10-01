@@ -1,5 +1,12 @@
 // Shared low-level helpers.
 
+// Procore returns rich-text fields (proposal scope_of_work/notes, email bodies) as
+// HTML. Strip tags and collapse whitespace before handing text to Claude or storing
+// it as a plain-text snippet — nothing here needs the markup.
+export function stripHtml(html) {
+  return (html || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
 // This account's REAL per-invocation subrequest ceiling is well under Cloudflare's
 // documented number — confirmed empirically on this plan (25 parallel failed, 8
 // succeeded), and punch-worker's Stage Enforcer runs at exactly this size. Every

@@ -8,6 +8,7 @@ import { isPostCreation } from "./checklist.js";
 import { callClaude } from "./claude.js";
 import { procoreFetch } from "./procore.js";
 import { EMAIL_TOOL, BID_BOARD, ESTIMATING } from "./procore-shapes.js";
+import { stripHtml } from "./util.js";
 
 async function loadProjectAndTasks(sql, projectId) {
   const [project] = await sql`select * from projects where id = ${projectId}`;
@@ -192,10 +193,12 @@ export async function draftScopeSummary({ params, env, sql }) {
         proposal = {
           name: primary.name,
           total: primary.total,
-          scope_of_work: primary.scope_of_work || null,
+          // scope_of_work/notes come back as rich-text HTML (<ul>/<li>/<strong>);
+          // inclusions/exclusions are already plain strings.
+          scope_of_work: primary.scope_of_work ? stripHtml(primary.scope_of_work) : null,
           inclusions: primary.inclusions || [],
           exclusions: primary.exclusions || [],
-          notes: primary.notes || null,
+          notes: primary.notes ? stripHtml(primary.notes) : null,
         };
         const summaryRes = await procoreFetch(env, ESTIMATING.summaryPath(project.procore_project_id, primary.id), { version: ESTIMATING.version });
         if (summaryRes.ok) summary = ESTIMATING.parseSummary(summaryRes.data);
@@ -218,7 +221,7 @@ export async function draftScopeSummary({ params, env, sql }) {
       const CHAR_BUDGET = 60_000;
       let used = 0;
       for (const e of sorted) {
-        const body = (e.body || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+        const body = stripHtml(e.body);
         const snippet = body.slice(0, CHAR_BUDGET - used);
         if (!snippet) break;
         emails.push({ subject: e.subject, sent_at: e.email_sent_at, snippet });

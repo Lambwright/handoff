@@ -473,11 +473,11 @@ export const EMAIL_TOOL = {
 // estimator-authored scope text, not something to infer) -> /summary on that
 // same proposal id for the cost/margin/hours breakdown.
 //
-// Still NOT live-tested against a real project (HANDOFF hasn't completed a
-// real create yet — every project row is still status:'gate'). Documented
-// shapes below are from developers.procore.com's reference pages directly,
-// which is a materially stronger starting point than the old 404-guessing,
-// but confirm against a live response before fully trusting field names.
+// CONFIRMED live 2026-10-01 against a real Portfolio project/proposal (not one
+// HANDOFF created — HANDOFF hasn't completed a real create yet, every project
+// row is still status:'gate'; tested via /admin/procore-probe against an
+// existing project instead). Both proposals and summary shapes below are the
+// real response, not the reference-page guess.
 // ---------------------------------------------------------------------------
 export const ESTIMATING = {
   version: "v2.0",
@@ -495,18 +495,25 @@ export const ESTIMATING = {
     return list.find((p) => p.is_primary) || null;
   },
 
+  // data: {data: {waste, margin, tax: each {material,labor,equipment,subcontractor,
+  // travel}, labor_cost, labor_factor, markups: [{id,name,value,value_type,stage,...}]}}.
+  // NOT a rolled-up totals dashboard — the Estimate Total dollar figure is on the
+  // proposal itself (proposal.total), not here. This is the markup/waste/tax RATE
+  // structure (e.g. a "Bonding" or "Overhead" markup's percent), per cost category.
+  // Real response seen (2026-10-01) had every rate at 0 and two LEGACY_-prefixed
+  // markup types — may be an old estimate using a legacy markup model; re-check
+  // against a newer one if the shape ever looks inconsistent.
   parseSummary(data) {
-    // TODO(sandbox): field names unconfirmed against a live response — the
-    // reference page content wasn't reachable for this specific endpoint
-    // (still in beta). Defensive fallbacks kept from the earlier guess; fix
-    // once a real summary response is seen.
+    const d = data?.data || {};
     return {
-      total_cost: data?.total_cost ?? data?.summary?.total_cost ?? null,
-      total_labor_hours: data?.total_labor_hours ?? data?.summary?.total_labor_hours ?? null,
-      margin_percent: data?.margin_percent ?? data?.summary?.margin_percent ?? null,
-      total_sales: data?.total_sales ?? data?.summary?.total_sales ?? null,
-      estimate_total: data?.estimate_total ?? data?.summary?.estimate_total ?? null,
-      rows: data?.rows ?? data?.line_item_types ?? [],
+      labor_cost: d.labor_cost ?? null,
+      labor_factor: d.labor_factor ?? null,
+      waste: d.waste || null,
+      margin: d.margin || null,
+      tax: d.tax || null,
+      markups: (d.markups || [])
+        .filter((m) => m.name)
+        .map((m) => ({ name: m.name, value: m.value, value_type: m.value_type })),
     };
   },
 };
