@@ -458,29 +458,48 @@ export const EMAIL_TOOL = {
 };
 
 // ---------------------------------------------------------------------------
-// Project-level Estimating tool (cost / labour hours / margin for the brief)
+// Project-level Estimating tool: proposals + the cost/margin/hours summary.
+//
+// RESOLVED 2026-10-01 via Procore API Support (not a probe guess — official,
+// documented, and Ben's account was specifically granted public access to the
+// summary endpoint, which was previously private beta). Every earlier guess
+// against bid_board_projects/{id} 404'd because this lives under the real
+// Portfolio project_id, not the bid id — only reachable AFTER create.js has
+// run (matches scope_summary already being post_creation in checklist.js, so
+// no flow change needed).
+//
+// Chain: list proposals for the project -> find is_primary -> that proposal
+// already carries scope_of_work/inclusions/exclusions/notes directly (real
+// estimator-authored scope text, not something to infer) -> /summary on that
+// same proposal id for the cost/margin/hours breakdown.
+//
+// Still NOT live-tested against a real project (HANDOFF hasn't completed a
+// real create yet — every project row is still status:'gate'). Documented
+// shapes below are from developers.procore.com's reference pages directly,
+// which is a materially stronger starting point than the old 404-guessing,
+// but confirm against a live response before fully trusting field names.
 // ---------------------------------------------------------------------------
 export const ESTIMATING = {
-  // TODO(sandbox): still unconfirmed. Re-probed 2026-09-29 against a real bid
-  // (Bid Board permission is granted now, so that's not what's blocking this) —
-  // every guessed sub-resource on bid_board_projects/{id} 404'd: /estimate,
-  // /summary, /line_items, /cost_items, /cost_types, /wbs_items, /bid_items.
-  // The single bid record itself (GET bid_board_projects/{id}) carries no cost
-  // breakdown beyond stats.total — no margin/hours/line-items fields at all.
-  // Strong signal the line-item/cost/margin/hours data Ben sees in Procore's UI
-  // lives in a genuinely different API surface than this "estimating" v2.0
-  // namespace (bid_board_projects is Procore's pipeline-tracker view, not
-  // necessarily the same product as the "Estimating" tool with cost rows) —
-  // worth asking Ben what tool/tab he's actually looking at before guessing
-  // more paths blind. This data never has to leave Procore (sidesteps the
-  // SCOUT->NetSuite write-leg risk).
-  summaryPath: (projectId) => `/projects/${projectId}/estimating/summary`,
   version: "v2.0",
 
+  proposalsPath: (projectId) => `/projects/${projectId}/estimating/proposals`,
+
+  summaryPath: (projectId, proposalId) => `/projects/${projectId}/estimating/proposals/${proposalId}/summary`,
+
+  // data: the array of proposals, each e.g. {id, name, type, is_primary, total,
+  // scope_of_work, inclusions, exclusions, notes, quote_nr, updated_at}.
+  // type is "ESTIMATE" | "CHANGE_ORDER" — only ESTIMATE-type proposals are
+  // candidates for "the" primary scope.
+  findPrimaryProposal(data) {
+    const list = Array.isArray(data?.data) ? data.data : [];
+    return list.find((p) => p.is_primary) || null;
+  },
+
   parseSummary(data) {
-    // Shape from Ben's live screenshot: cost-item-type rows (Labor, Materials),
-    // total labour hours, difficulty factor, waste %, total cost, margin %,
-    // total sales, Estimate Total.
+    // TODO(sandbox): field names unconfirmed against a live response — the
+    // reference page content wasn't reachable for this specific endpoint
+    // (still in beta). Defensive fallbacks kept from the earlier guess; fix
+    // once a real summary response is seen.
     return {
       total_cost: data?.total_cost ?? data?.summary?.total_cost ?? null,
       total_labor_hours: data?.total_labor_hours ?? data?.summary?.total_labor_hours ?? null,

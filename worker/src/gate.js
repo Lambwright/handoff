@@ -7,7 +7,7 @@ import { runCreatePipeline, verifyBackedTask, pushOneDocument, FIELD_PUSHERS } f
 import { isPostCreation } from "./checklist.js";
 import { callClaude } from "./claude.js";
 import { procoreFetch } from "./procore.js";
-import { EMAIL_TOOL, BID_BOARD } from "./procore-shapes.js";
+import { EMAIL_TOOL, BID_BOARD, ESTIMATING } from "./procore-shapes.js";
 
 async function loadProjectAndTasks(sql, projectId) {
   const [project] = await sql`select * from projects where id = ${projectId}`;
@@ -162,12 +162,12 @@ export async function uploadGateDocument({ params, request, env, sql, auth }, do
 }
 
 // POST /projects/:id/scope-draft — AI-draft the scope summary from whatever
-// context HANDOFF can reach: the bid record, its Procore notes, and (once the
-// project exists) the tender emails forwarded into Procore's Emails tool.
-// TODO(sandbox): the project-level Estimating tool's line items/margin/hours
-// still isn't reachable — see procore-shapes.js's ESTIMATING comment. Bid
-// drawings have no confirmed API path either (same file, BID_BOARD) — those
-// arrive via the gate's manual upload instead, not this draft.
+// context HANDOFF can reach: the bid record, its Procore notes, the primary
+// Estimating proposal (real estimator-authored scope_of_work/inclusions/
+// exclusions, once the project exists), and the tender emails forwarded into
+// Procore's Emails tool. Bid drawings have no confirmed API path (see
+// procore-shapes.js's BID_BOARD comment) — those arrive via the gate's manual
+// upload instead, not this draft.
 export async function draftScopeSummary({ params, env, sql }) {
   const [project] = await sql`select * from projects where id = ${params.id}`;
   if (!project) return json({ error: "not_found" }, 404);
@@ -179,6 +179,27 @@ export async function draftScopeSummary({ params, env, sql }) {
     const { ok, data } = await procoreFetch(env, BID_BOARD.notesPath(env.PROCORE_COMPANY_ID, bid.id), { version: BID_BOARD.notesVersion });
     if (ok && Array.isArray(data?.data)) {
       bidNotes = data.data.map((n) => n.value).filter(Boolean);
+    }
+  }
+
+  let proposal = null;
+  let summary = null;
+  if (project.procore_project_id) {
+    const { ok, data } = await procoreFetch(env, ESTIMATING.proposalsPath(project.procore_project_id), { version: ESTIMATING.version });
+    if (ok) {
+      const primary = ESTIMATING.findPrimaryProposal(data);
+      if (primary) {
+        proposal = {
+          name: primary.name,
+          total: primary.total,
+          scope_of_work: primary.scope_of_work || null,
+          inclusions: primary.inclusions || [],
+          exclusions: primary.exclusions || [],
+          notes: primary.notes || null,
+        };
+        const summaryRes = await procoreFetch(env, ESTIMATING.summaryPath(project.procore_project_id, primary.id), { version: ESTIMATING.version });
+        if (summaryRes.ok) summary = ESTIMATING.parseSummary(summaryRes.data);
+      }
     }
   }
 
@@ -213,17 +234,24 @@ export async function draftScopeSummary({ params, env, sql }) {
       maxTokens: 700,
       system:
         "You draft a short 'scope of work' summary for an Einbau Services millwork-installation project handoff, for the incoming PM. " +
+        "If a primary estimating proposal is given, its scope_of_work/inclusions/exclusions are the estimator's own words — " +
+        "ground the draft in those rather than re-inventing them, and use the other material to fill gaps or add context. " +
         "Use only the material given. If it's thin, say what's known and flag what's missing — do not invent scope. 4-8 sentences, plain prose, no bullet markup.",
       userMessage: JSON.stringify({
         project: { name: project.name, type: project.project_type, customer: project.customer?.name, address: project.address },
         bid: { name: bid.name, description: bid.description, estimate_total: bid.stats?.total, notes: bidNotes },
+        primary_proposal: proposal,
+        estimate_summary: summary,
         tender_emails: emails,
       }),
     });
   } catch (e) {
     draft = `(AI draft unavailable: ${e.message})`;
   }
-  return json({ draft, context: { tender_email_count: emails.length, bid_note_count: bidNotes.length } });
+  return json({
+    draft,
+    context: { tender_email_count: emails.length, bid_note_count: bidNotes.length, has_primary_proposal: Boolean(proposal) },
+  });
 }
 
 function gateIsComplete(tasks) {
