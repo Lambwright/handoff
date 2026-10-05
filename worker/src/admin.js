@@ -3,7 +3,7 @@
 // own `users` table is the source of truth for estimator/assignment/pm/admin.
 
 import { json } from "./http.js";
-import { verifyIdentity, resolveActor } from "./auth.js";
+import { verifyIdentity, resolveHandoffActor } from "./auth.js";
 import { procoreFetch } from "./procore.js";
 import { PROCORE_DEPARTMENTS, REGIONS, TIMEZONES } from "./procore-shapes.js";
 
@@ -34,7 +34,7 @@ export async function getMe({ request, env, sql }) {
   const id = await verifyIdentity(request, env);
   if (!id.ok) return json({ error: "unauthorized", reason: id.reason }, id.status || 401);
 
-  const actor = await resolveActor(sql, id.user.username);
+  const actor = await resolveHandoffActor(sql, id.user);
   return json(
     { user: id.user, actor: actor || null },
     200,

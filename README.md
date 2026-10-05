@@ -51,43 +51,49 @@ shape every file in this repo:
   `notifications` row and shown in the UI; nothing is actually sent yet. See
   `worker/README.md`.
 
-## Coming change: Einbau ID role matrix
+## Role matrix (Einbau ID) — switch-over in progress
 
 Einbau ID is moving from each app owning its own `admin`/`user` split to a
-suite-wide model: company job roles (Super Admin / Admin / Estimator / PM /
-Project Coordinator / CRM / Accounting / Logistics) plus a per-app matrix,
-edited in HELM by Ben only, mapping each job role to a level in each app.
-HANDOFF is the app most affected — signed off by Ben, relayed via a
-cross-session message from the HELM/auth session (2026-09-30). **Not built
-yet** — recorded here so it isn't lost, and kept current as it lands.
+suite-wide model: company job roles plus a per-app matrix, edited in HELM by
+Ben only. Contract lives in `auth-worker/README.md` → "Role matrix".
 
-- HANDOFF's levels become: `admin`, `estimator`, `assignment` is going away
-  (folds into `admin` — no route changes needed, `admin` already bypasses
-  every `roles[]` check in `requireRole`), `pm` (NEW: also finalizes any gate
-  fields the estimator left missing), and a new `viewer` (read-only —
-  projects/briefs, no gate edits, no handoffs, no PM assignment).
-- `auth-worker`'s `/auth/verify` will add `user.appRoles` (computed level per
-  app, e.g. `{HANDOFF: "pm"}`) and `user.jobRole` (informational); `user.role`
-  becomes legacy (`admin` only for the Super Admin post-switch).
-- **HANDOFF's own `users` table stops being the source of truth for role.**
-  It currently does double duty — per-request auth AND the queryable PM
-  roster (`assignment.js`'s workload aggregation runs `where role='pm' and
-  active and procore_department_id is not null` directly against this
-  table). Swapping auth to `appRoles.HANDOFF` is easy; giving HANDOFF a way
-  to enumerate "who currently has pm-level HANDOFF access" for that roster
-  query is the one real open question — flagged back to the HELM session,
-  not yet answered.
-- The one HANDOFF-specific field besides role that has to survive the
-  switch: `procore_department_id`/`procore_department_name` (the PM →
-  Procore Department mapping — Einbau's own Department list mixes departed
-  staff and non-person buckets, so this curated mapping has no home anywhere
-  else). Plan is a HANDOFF-local table keyed by `einbau_username` holding
-  just that.
-- Also flagged back: `PATCH /gate-tasks/:id` and `POST
-  /gate-tasks/:id/verify` are currently `roles: []` — open to *any*
-  authenticated HANDOFF actor today, and `GapResolution.jsx` has no
-  client-side role gate either. That needs real gating added as part of the
-  switch, or `viewer` will retain gate-edit access by accident.
+**Status (2026-10-05):** HANDOFF reads `user.appRoles.HANDOFF` and handles
+three cases: a real level (`admin`/`estimator`/`assignment`/`pm`/`viewer`) is
+used directly; `access` (HANDOFF not yet switched live) falls back to the
+existing `users` table role, so nothing changes until Ben flips HANDOFF's Live
+switch in HELM; `no_access` or anything else is denied. `/me` and
+`requireRole` resolve identically. Gate task edits are restricted to
+`estimator`, `pm`, and `admin` — `viewer` can read but not edit.
+
+**Remaining before/after the flip:**
+- Before the flip, the PM roster is built from `/auth/app/users` (`level` =
+  `pm`, or `access` + legacy `users.role = 'pm'`). PMs are matched to Procore
+  Departments via `users.procore_department_id`, which is reused as the
+  HANDOFF-local per-person store — no new table.
+- After the flip, drop `users.role` (follow-up) and remove the `access`
+  fallback.
+- Admin → Users still edits role until then.
+
+Design notes carried from the cross-session message:
+
+- HANDOFF's levels: `admin` (everything, incl. user and PM-affinity admin),
+  `estimator` (start handoffs, fill gate, upload PO/tender, submit), `pm`
+  (read assigned projects and briefs, finalize missing gate fields),
+  `viewer` (read-only), and `assignment` (retired — admins pick PMs).
+- Only the Super Admin manages users, roles, and the matrix. "Admin" is a
+  job role.
+
+- The PM roster question is resolved: `POST /auth/app/users { app: "HANDOFF" }`
+  returns `{ app, users: [{ username, displayName, email, level }] }` — people
+  who can open HANDOFF, with their level. `assignment.js` filters that to
+  `pm` (and, pre-flip, to legacy `pm` rows) and joins the Department mapping.
+  `GET /pm-roster` now also reports PMs with no Department mapping under
+  `unmapped`.
+- `PATCH /gate-tasks/:id` and `POST /gate-tasks/:id/verify` are gated to
+  `estimator`/`pm` (admin passes). The gate UI doesn't hide edits for viewers
+  yet — they'll see a 403 until that's cosmetically hidden.
+- Confirming an assignment now rejects a department that isn't a current HANDOFF
+  PM, server-side.
 
 ## Rollout: how estimators actually reach HANDOFF
 

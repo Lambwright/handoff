@@ -106,23 +106,54 @@ async function loadActiveProjects(env) {
   return hydrated;
 }
 
-// The Procore Department dropdown itself is NOT a valid PM-candidate list —
-// confirmed by Ben: it mixes real current PMs, people who no longer work at
-// Einbau, and non-person buckets ("Project Management", "Back Log"). The
-// candidate roster is HANDOFF's own curated `users` table instead — an admin
-// maps each active pm-role person to their Department id once (Admin -> Users).
-async function loadPmDirectory(sql) {
+// Who counts as a PM is decided by auth-worker's role matrix (appRoles.HANDOFF
+// = 'pm'), looked up via /auth/app/users with the caller's own token. While a
+// person's HANDOFF switch is still "access" (not live), fall back to their
+// users-table role = 'pm'. The Procore Department mapping for each PM lives on
+// their users row (procore_department_id/name, keyed by einbau_username) — the
+// Department dropdown itself isn't a PM list, it mixes departed staff and
+// non-person buckets. A PM with no mapping is reported, not silently dropped.
+async function loadPmRoster(env, sql, request) {
+  const token = (request.headers.get("Authorization") || "").replace(/^Bearer /, "");
+  const res = await env.AUTH_WORKER.fetch(`${env.AUTH_WORKER_URL}/auth/app/users`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ app: "HANDOFF" }),
+  });
+  if (!res.ok) throw new Error(`auth-worker /auth/app/users failed: HTTP ${res.status}`);
+  const { users = [] } = await res.json();
+
   const rows = await sql`
-    select procore_department_id, procore_department_name, name
-    from users
-    where role = 'pm' and active = true and procore_department_id is not null`;
-  return rows.map((r) => ({ id: r.procore_department_id, name: r.procore_department_name || r.name }));
+    select einbau_username, name, role, active, procore_department_id, procore_department_name from users`;
+  const legacy = new Map(rows.map((r) => [r.einbau_username, r]));
+
+  return users
+    .map((u) => {
+      const row = legacy.get(String(u.username).toLowerCase());
+      const isPm = u.level === "pm" || (u.level === "access" && row?.role === "pm" && row.active);
+      return {
+        username: u.username,
+        name: row?.procore_department_name || row?.name || u.displayName,
+        level: u.level,
+        isPm,
+        department_id: row?.procore_department_id || null,
+        department_name: row?.procore_department_name || null,
+      };
+    })
+    .filter((p) => p.isPm);
 }
 
-async function computeCandidates(env, sql, project) {
+async function loadPmDirectory(env, sql, request) {
+  const roster = await loadPmRoster(env, sql, request);
+  return roster
+    .filter((p) => p.department_id)
+    .map((p) => ({ id: p.department_id, name: p.department_name || p.name }));
+}
+
+async function computeCandidates(env, sql, project, request) {
   const [activeProjects, pmDirectory, affinityRows] = await Promise.all([
     loadActiveProjects(env),
-    loadPmDirectory(sql),
+    loadPmDirectory(env, sql, request),
     sql`select * from pm_affinity`,
   ]);
 
@@ -151,29 +182,32 @@ async function computeCandidates(env, sql, project) {
 // Routes
 // ---------------------------------------------------------------------------
 
-// GET /pm-roster — the curated candidate list on its own, for UI that needs to
-// offer "pick a PM" without pulling full workload data (the affinity admin
-// form's preferred_pm dropdown, mainly). Any active HANDOFF role can read it.
-export async function getPmRoster({ sql }) {
-  const roster = await loadPmDirectory(sql);
-  return json({ roster });
+// GET /pm-roster — PMs who can be assigned (mapped to a Procore Department),
+// plus any PM who still has no mapping, so an admin can see the gap. Any
+// authenticated HANDOFF user can read it.
+export async function getPmRoster({ request, env, sql }) {
+  const roster = await loadPmRoster(env, sql, request);
+  return json({
+    roster: roster.filter((p) => p.department_id).map((p) => ({ id: p.department_id, name: p.department_name || p.name })),
+    unmapped: roster.filter((p) => !p.department_id).map((p) => ({ username: p.username, name: p.name })),
+  });
 }
 
-export async function getAssignmentCandidates({ params, env, sql }) {
+export async function getAssignmentCandidates({ params, env, sql, request }) {
   const [project] = await sql`select * from projects where id = ${params.id}`;
   if (!project) return json({ error: "not_found" }, 404);
   if (!project.procore_project_id) {
     return json({ error: "not_created", detail: "This handoff hasn't been submitted yet." }, 409);
   }
-  const candidates = await computeCandidates(env, sql, project);
+  const candidates = await computeCandidates(env, sql, project, request);
   return json({ project, candidates });
 }
 
-export async function postAssignmentRecommendation({ params, env, sql }) {
+export async function postAssignmentRecommendation({ params, env, sql, request }) {
   const [project] = await sql`select * from projects where id = ${params.id}`;
   if (!project) return json({ error: "not_found" }, 404);
 
-  const candidates = await computeCandidates(env, sql, project);
+  const candidates = await computeCandidates(env, sql, project, request);
   const [scopeTask] = await sql`select value from gate_tasks where project_id = ${project.id} and task_type = 'scope_summary'`;
 
   let recommended_pm = candidates[0]?.pm_id || null;
@@ -223,6 +257,12 @@ export async function confirmAssignment({ params, request, env, sql, auth }) {
   const [project] = await sql`select * from projects where id = ${params.id}`;
   if (!project) return json({ error: "not_found" }, 404);
 
+  const roster = await loadPmRoster(env, sql, request);
+  const pm = roster.find((p) => p.department_id && String(p.department_id) === String(body.assigned_pm));
+  if (!pm) {
+    return json({ error: "invalid_request", detail: "That department isn't a current HANDOFF PM." }, 400);
+  }
+
   const [lastEvent] = await sql`
     select * from assignment_events where project_id = ${project.id} order by created_at desc limit 1`;
   const overridden = Boolean(lastEvent) && lastEvent.recommended_pm !== body.assigned_pm;
@@ -242,12 +282,11 @@ export async function confirmAssignment({ params, request, env, sql, auth }) {
   // punch-worker already keeps in sync for its own checklist writeback, so a
   // HANDOFF-created project is sortable/searchable by PM the same way. Best-effort
   // — never blocks the confirm itself, which already succeeded above.
-  const [pmUser] = await sql`select name, procore_department_name from users where procore_department_id = ${body.assigned_pm}`;
   const pmSync = await syncProjectManager(env, {
     procoreProjectId: project.procore_project_id,
     projectNumber: project.project_number,
     companyId: env.PROCORE_COMPANY_ID,
-    pmName: pmUser?.procore_department_name || pmUser?.name || "",
+    pmName: pm.department_name || pm.name,
   }).catch((e) => ({ error: e.message }));
 
   const [event] = await sql`

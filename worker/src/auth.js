@@ -37,20 +37,39 @@ export function isServiceCaller(request, env) {
   return Boolean(key) && Boolean(env.HANDOFF_SERVICE_KEY) && key === env.HANDOFF_SERVICE_KEY;
 }
 
-// The HANDOFF-side user row (role + attribution) for a verified Einbau ID username.
+const HANDOFF_LEVELS = ["admin", "estimator", "assignment", "pm", "viewer"];
+
+// The HANDOFF-side user row for a verified Einbau ID username — only consulted
+// while HANDOFF's role-matrix Live switch is off ("access"), and for the
+// per-person PM → Procore Department mapping, which lives on the same row.
 export async function resolveActor(sql, username) {
   if (!username) return null;
   const rows = await sql`
-    select id, einbau_username, name, role, active
+    select id, einbau_username, name, role, active, procore_department_id, procore_department_name
     from users
     where einbau_username = ${String(username).toLowerCase()}`;
   return rows[0] || null;
 }
 
-// Verify the session AND require an active HANDOFF role. `roles` is a list of
-// allowed roles; 'admin' always passes. Returns { ok, user, actor, refreshedToken }
-// on success, or an auth-error shape ({ ok:false, status, reason }) to hand to
-// http.authError.
+// Role comes from auth-worker's appRoles.HANDOFF (role matrix). "access" means
+// HANDOFF isn't switched over yet, so keep the users-table role; anything else
+// (no_access, unknown) is denied. user.role / user.jobRole are never gated on.
+export async function resolveHandoffActor(sql, user) {
+  const username = String(user?.username || "").toLowerCase();
+  const appRole = user?.appRoles?.HANDOFF;
+  if (HANDOFF_LEVELS.includes(appRole)) {
+    return { einbau_username: username, name: user.displayName || username, role: appRole, active: true, source: "matrix" };
+  }
+  if (appRole === "access") {
+    const row = await resolveActor(sql, username);
+    return row && row.active ? { ...row, source: "users" } : null;
+  }
+  return null;
+}
+
+// Verify the session AND require a HANDOFF role. `roles` is a list of allowed
+// roles; 'admin' always passes. Returns { ok, user, actor, refreshedToken } on
+// success, or an auth-error shape ({ ok:false, status, reason }) for http.authError.
 export async function requireRole(request, env, sql, roles = null) {
   if (isServiceCaller(request, env)) {
     return { ok: true, user: { username: "service" }, actor: { einbau_username: "service", role: "admin", name: "HANDOFF service" }, refreshedToken: null };
@@ -58,12 +77,12 @@ export async function requireRole(request, env, sql, roles = null) {
   const id = await verifyIdentity(request, env);
   if (!id.ok) return id;
 
-  const actor = await resolveActor(sql, id.user?.username);
-  if (!actor || !actor.active) {
+  const actor = await resolveHandoffActor(sql, id.user);
+  if (!actor) {
     return {
       ok: false,
       status: 403,
-      reason: `"${id.user?.username}" has no active HANDOFF role yet — an admin needs to add you.`,
+      reason: `"${id.user?.username}" doesn't have HANDOFF access — an admin needs to grant it.`,
     };
   }
   if (roles && roles.length && actor.role !== "admin" && !roles.includes(actor.role)) {

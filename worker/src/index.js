@@ -83,8 +83,8 @@ router.get("/projects/by-procore/:procoreId", { roles: [] }, getProjectByProcore
 router.get("/projects/:id/summary", { roles: [] }, getProjectSummary);
 router.get("/customer-search", { roles: [] }, searchCustomerDirectory);
 router.get("/projects/:id/gate", { roles: [] }, getGate);
-router.patch("/gate-tasks/:id", { roles: [] }, patchGateTask);
-router.post("/gate-tasks/:id/verify", { roles: [] }, verifyGateTask);
+router.patch("/gate-tasks/:id", { roles: ["estimator", "pm"] }, patchGateTask);
+router.post("/gate-tasks/:id/verify", { roles: ["estimator", "pm"] }, verifyGateTask);
 router.post("/projects/:id/gate/po-document", { roles: ["estimator"] }, (ctx) =>
   uploadGateDocument(ctx, "po_document")
 );
