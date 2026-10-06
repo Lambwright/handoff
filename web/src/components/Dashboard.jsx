@@ -34,13 +34,15 @@ export default function Dashboard({ actor }) {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <div className="tabs" style={{ marginBottom: 0 }}>
-          {STATUSES.map((s) => (
-            <button key={s.key} className={`tab ${status === s.key ? "active" : ""}`} onClick={() => setStatus(s.key)}>
-              {s.label}
-            </button>
-          ))}
-        </div>
+        {actor?.role !== "pm" && (
+          <div className="tabs" style={{ marginBottom: 0 }}>
+            {STATUSES.map((s) => (
+              <button key={s.key} className={`tab ${status === s.key ? "active" : ""}`} onClick={() => setStatus(s.key)}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        )}
         {(actor?.role === "estimator" || actor?.role === "admin") && (
           <a className="btn btn-accent" href="#/bids">
             + Start a Handoff
