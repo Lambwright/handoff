@@ -67,6 +67,21 @@ export async function resolveHandoffActor(sql, user) {
   return null;
 }
 
+// A PM only sees a handoff once it's assigned to them. Other roles are unaffected.
+// Handlers return 404 (not 403) when this is false, so the handoff doesn't appear
+// to exist to a PM who isn't on it.
+export async function pmMayAccess(sql, actor, project) {
+  if (!actor || actor.role !== "pm") return true;
+  if (!project || !["assigned", "complete"].includes(project.status)) return false;
+  const [me] = await sql`select procore_department_id from users where einbau_username = ${actor.einbau_username}`;
+  if (!me?.procore_department_id) return false;
+  const [last] = await sql`
+    select assigned_pm from assignment_events
+    where project_id = ${project.id} and assigned_pm is not null
+    order by decided_at desc limit 1`;
+  return Boolean(last) && String(last.assigned_pm) === String(me.procore_department_id);
+}
+
 // Verify the session AND require a HANDOFF role. `roles` is a list of allowed
 // roles; 'admin' always passes. Returns { ok, user, actor, refreshedToken } on
 // success, or an auth-error shape ({ ok:false, status, reason }) for http.authError.

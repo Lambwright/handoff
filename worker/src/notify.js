@@ -5,6 +5,7 @@
 // every caller.
 
 import { json } from "./http.js";
+import { pmMayAccess } from "./auth.js";
 
 export async function writeNotification(sql, { projectId = null, sourceBidId = null, channel, escalationLevel = 0, recipient = null, subject = null, body = null }) {
   const [row] = await sql`
@@ -14,7 +15,9 @@ export async function writeNotification(sql, { projectId = null, sourceBidId = n
   return row;
 }
 
-export async function listNotifications({ params, sql }) {
+export async function listNotifications({ params, sql, auth }) {
+  const [project] = await sql`select * from projects where id = ${params.projectId}`;
+  if (!project || !(await pmMayAccess(sql, auth?.actor, project))) return json({ error: "not_found" }, 404);
   const rows = await sql`select * from notifications where project_id = ${params.projectId} order by created_at desc`;
   return json({ notifications: rows });
 }

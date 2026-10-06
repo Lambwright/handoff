@@ -9,6 +9,7 @@ import { procoreFetch } from "./procore.js";
 import { ESTIMATING } from "./procore-shapes.js";
 import { callClaude, extractJSON } from "./claude.js";
 import { writeNotification } from "./notify.js";
+import { pmMayAccess } from "./auth.js";
 
 async function loadEstimateSummary(env, project) {
   try {
@@ -81,7 +82,9 @@ export async function generateBrief(env, sql, project, assignedPm) {
   return brief;
 }
 
-export async function getBrief({ params, sql }) {
+export async function getBrief({ params, sql, auth }) {
+  const [project] = await sql`select * from projects where id = ${params.projectId}`;
+  if (!project || !(await pmMayAccess(sql, auth?.actor, project))) return json({ error: "not_found" }, 404);
   const [brief] = await sql`
     select * from handoff_briefs where project_id = ${params.projectId} order by generated_at desc limit 1`;
   if (!brief) return json({ error: "not_found" }, 404);

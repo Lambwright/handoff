@@ -3,29 +3,34 @@
 
 import { json } from "./http.js";
 import { isPostCreation } from "./checklist.js";
+import { pmMayAccess } from "./auth.js";
 
-export async function listProjects({ url, sql }) {
+export async function listProjects({ url, sql, auth }) {
   const status = url.searchParams.get("status");
   const rows = status
     ? await sql`select * from projects where status = ${status} order by created_at desc`
     : await sql`select * from projects order by created_at desc`;
-  return json({ projects: rows });
+  const visible = [];
+  for (const p of rows) if (await pmMayAccess(sql, auth?.actor, p)) visible.push(p);
+  return json({ projects: visible });
 }
 
 // GET /projects/by-procore/:procoreId — the HANDOFF handoff for a Procore
 // project id, or 404 if that project wasn't created through HANDOFF.
-export async function getProjectByProcore({ params, sql }) {
+export async function getProjectByProcore({ params, sql, auth }) {
   const [project] = await sql`select * from projects where procore_project_id = ${params.procoreId}`;
-  if (!project) return json({ error: "not_found", detail: "This project wasn't created through HANDOFF." }, 404);
+  if (!project || !(await pmMayAccess(sql, auth?.actor, project))) {
+    return json({ error: "not_found", detail: "This project wasn't created through HANDOFF." }, 404);
+  }
   return json({ project });
 }
 
 // GET /projects/:id/summary — everything the PM read view needs in one call:
 // the handoff, its gate tasks (with open gaps), the latest brief, the latest
 // assignment decision, the housed documents, and the notification ledger.
-export async function getProjectSummary({ params, sql }) {
+export async function getProjectSummary({ params, sql, auth }) {
   const [project] = await sql`select * from projects where id = ${params.id}`;
-  if (!project) return json({ error: "not_found" }, 404);
+  if (!project || !(await pmMayAccess(sql, auth?.actor, project))) return json({ error: "not_found" }, 404);
 
   const [gateTasks, briefRow, assignmentRow, docs, notifications] = await Promise.all([
     sql`select * from gate_tasks where project_id = ${params.id} order by created_at`,

@@ -7,6 +7,7 @@ import { runCreatePipeline, verifyBackedTask, pushOneDocument, FIELD_PUSHERS } f
 import { isPostCreation } from "./checklist.js";
 import { callClaude } from "./claude.js";
 import { procoreFetch } from "./procore.js";
+import { pmMayAccess } from "./auth.js";
 import { EMAIL_TOOL, BID_BOARD, ESTIMATING } from "./procore-shapes.js";
 import { stripHtml } from "./util.js";
 
@@ -17,9 +18,9 @@ async function loadProjectAndTasks(sql, projectId) {
   return { project, tasks };
 }
 
-export async function getGate({ params, sql }) {
+export async function getGate({ params, sql, auth }) {
   const { project, tasks } = await loadProjectAndTasks(sql, params.id);
-  if (!project) return json({ error: "not_found" }, 404);
+  if (!project || !(await pmMayAccess(sql, auth?.actor, project))) return json({ error: "not_found" }, 404);
   return json({ project, tasks });
 }
 
@@ -41,6 +42,7 @@ export async function patchGateTask({ params, request, env, sql, auth }) {
   if (!task) return json({ error: "not_found" }, 404);
 
   const [project] = await sql`select * from projects where id = ${task.project_id}`;
+  if (!(await pmMayAccess(sql, auth?.actor, project))) return json({ error: "not_found" }, 404);
   const postCreation = project && project.status !== "gate";
 
   let updated;
@@ -111,12 +113,13 @@ export async function patchGateTask({ params, request, env, sql, auth }) {
 
 // Manual re-check — meaningful once a Procore project exists (post-submit). If
 // there's no procore_project_id yet, there's nothing to verify against.
-export async function verifyGateTask({ params, env, sql }) {
+export async function verifyGateTask({ params, env, sql, auth }) {
   const [task] = await sql`select * from gate_tasks where id = ${params.id}`;
   if (!task) return json({ error: "not_found" }, 404);
   if (!task.verify_backing) return json({ error: "not_verifiable", detail: "This item has no live-check backing it." }, 400);
 
   const [project] = await sql`select * from projects where id = ${task.project_id}`;
+  if (!(await pmMayAccess(sql, auth?.actor, project))) return json({ error: "not_found" }, 404);
   if (!project?.procore_project_id) {
     return json({ error: "not_yet_created", detail: "The Procore project doesn't exist yet — nothing to verify against." }, 409);
   }
@@ -185,9 +188,9 @@ export async function uploadGateDocument({ params, request, env, sql, auth }, do
 // Procore's Emails tool. Bid drawings have no confirmed API path (see
 // procore-shapes.js's BID_BOARD comment) — those arrive via the gate's manual
 // upload instead, not this draft.
-export async function draftScopeSummary({ params, env, sql }) {
+export async function draftScopeSummary({ params, env, sql, auth }) {
   const [project] = await sql`select * from projects where id = ${params.id}`;
-  if (!project) return json({ error: "not_found" }, 404);
+  if (!project || !(await pmMayAccess(sql, auth?.actor, project))) return json({ error: "not_found" }, 404);
 
   const bid = project.bid_snapshot || {};
 
