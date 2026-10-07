@@ -234,6 +234,7 @@ export async function openHandoff({ request, env, sql, auth }) {
   for (const t of tasks) {
     let seedValue = null;
     if (t.task_type === "address") seedValue = draft.address;
+    else if (t.task_type === "customer") seedValue = customerSeed;
     else if (t.task_type === "timezone" && tzGuess) seedValue = { name: tzGuess };
     await sql`
       insert into gate_tasks (project_id, task_type, label, required, verify_backing, gap_owner, status, value)
