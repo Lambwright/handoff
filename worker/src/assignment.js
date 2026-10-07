@@ -157,8 +157,12 @@ async function computeCandidates(env, sql, project, request) {
   const pmDirectory = people.map((p) => ({ id: p.department_id, name: p.department_name || p.name }));
   const groupById = new Map(people.map((p) => [p.department_id, p.isPm ? "main" : "bench"]));
 
+  // aggregateWorkload also adds any department seen on an active project, so
+  // drop anything not tied to a person (departed staff, Back Log, etc.).
   let candidates = aggregateWorkload(activeProjects, project.timeline, pmDirectory);
-  candidates = candidates.map((c) => ({ ...c, group: groupById.get(c.pm_id) || "bench" }));
+  candidates = candidates
+    .filter((c) => groupById.has(c.pm_id))
+    .map((c) => ({ ...c, group: groupById.get(c.pm_id) }));
   candidates = applyAffinity(candidates, affinityRows, {
     region: project.address?.state_code || null,
     client: project.customer?.name || null,
