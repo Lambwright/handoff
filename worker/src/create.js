@@ -38,6 +38,8 @@ async function ensureProjectCreated(env, sql, project) {
     projectType: project.project_type,
     stageId,
     timeline: project.timeline,
+    address: project.address,
+    totalValue: project.bid_snapshot?.stats?.total ?? null,
   });
 
   const { ok, status, data } = await procoreFetch(env, PROJECT.createPath(), {

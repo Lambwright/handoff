@@ -235,6 +235,25 @@ export const PROVINCE_TIMEZONE = {
   NL: "Newfoundland",
 };
 
+// TODO(sandbox): Ben named "Standard Project Template - Estimate" as the
+// template new HANDOFF projects should use (2026-10-07) — this is its id, NOT
+// the company's default template (562949954018658, a plain "Standard Project
+// Template", confirmed separately via the company settings endpoint). Still
+// need to resolve it: list projects with is_template=true and match the name,
+// or ask Ben to read it off Procore's template admin screen. Left null
+// (project_template_id omitted from create) until then — creating without a
+// template is what caused the "no tools" project Ben hit originally, so this
+// is the one real blocker left on project creation.
+const PROJECT_TEMPLATE_ID = null;
+
+// TODO(sandbox): project_type_id is a real Procore id (see Create Project
+// reference), not the string "Contract" the original guess sent — Procore
+// most likely silently ignored that field entirely. No endpoint found yet to
+// list a company's project types; needs a probe (try bare GET /project_types,
+// or read the id off an existing Contract-type project via the single-project
+// GET's project_type.id) before this can be set.
+const CONTRACT_TYPE_ID = null;
+
 // ---------------------------------------------------------------------------
 // Project create + admin-field writes
 // ---------------------------------------------------------------------------
@@ -252,19 +271,29 @@ export const PROJECT = {
   getPath: (projectId, companyId) => `/projects/${projectId}?company_id=${companyId}`,
   version: "v1.0",
 
-  // TODO(sandbox): no real create has been run yet. Field names below are the
-  // PATCH-confirmed ones (project_stage_id / start_date / completion_date) plus
-  // guesses for type. Confirm with one sandbox create before trusting.
-  buildCreatePayload({ companyId, name, projectNumber, projectType, stageId, timeline }) {
+  // Field names below are from developers.procore.com's own Create Project
+  // reference (2026-10-07) — not a guess. project_template_id and
+  // project_type_id are real ids, not names/strings; PROJECT_TEMPLATE_ID is
+  // confirmed (Ben: "Standard Project Template - Estimate"), CONTRACT_TYPE_ID
+  // is still a placeholder — see the TODO on that constant below.
+  buildCreatePayload({ companyId, name, projectNumber, projectType, stageId, timeline, address, totalValue }) {
     const project = {
       name,
       project_number: projectNumber || undefined,
       active: true,
+      locale: "en-CA", // Ben: always English - Canada
     };
+    if (PROJECT_TEMPLATE_ID) project.project_template_id = PROJECT_TEMPLATE_ID;
     if (stageId) project.project_stage_id = stageId; // CONFIRMED field name (writeback)
-    if (projectType) project.type = projectType; // TODO(sandbox): likely project_type_id
+    if (projectType === "Contract" && CONTRACT_TYPE_ID) project.project_type_id = CONTRACT_TYPE_ID;
     if (timeline?.start_date) project.start_date = timeline.start_date; // CONFIRMED
     if (timeline?.end_date) project.completion_date = timeline.end_date; // CONFIRMED
+    if (totalValue != null) project.total_value = totalValue;
+    if (address?.street) project.address = address.street;
+    if (address?.city) project.city = address.city;
+    if (address?.state_code) project.state_code = address.state_code;
+    if (address?.postal_code) project.zip = address.postal_code;
+    if (address?.country_code) project.country_code = address.country_code;
     return { company_id: companyId, project };
   },
 
