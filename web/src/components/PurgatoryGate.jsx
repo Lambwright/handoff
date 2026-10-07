@@ -22,7 +22,7 @@ function stageLink(hash) {
 // don't appear on the pre-create page and don't block the submit.
 const POST_CREATION = new Set(["tender_correspondence", "scope_summary", "estimates_reviewed"]);
 
-export default function PurgatoryGate({ projectId }) {
+export default function PurgatoryGate({ projectId, actor }) {
   const [project, setProject] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [regionOptions, setRegionOptions] = useState([]);
@@ -125,7 +125,7 @@ export default function PurgatoryGate({ projectId }) {
           </div>
           <div className="checklist">
             {postTasks.map((task) => (
-              <GapResolution key={task.id} task={task} projectId={projectId} project={project} onChanged={load} regionOptions={regionOptions} timezoneOptions={timezoneOptions} />
+              <GapResolution key={task.id} task={task} projectId={projectId} project={project} onChanged={load} regionOptions={regionOptions} timezoneOptions={timezoneOptions} actor={actor} />
             ))}
           </div>
         </div>
@@ -155,15 +155,17 @@ export default function PurgatoryGate({ projectId }) {
 
           <div className="checklist">
             {preTasks.map((task) => (
-              <GapResolution key={task.id} task={task} projectId={projectId} project={project} onChanged={load} regionOptions={regionOptions} timezoneOptions={timezoneOptions} />
+              <GapResolution key={task.id} task={task} projectId={projectId} project={project} onChanged={load} regionOptions={regionOptions} timezoneOptions={timezoneOptions} actor={actor} />
             ))}
           </div>
 
-          <div style={{ marginTop: 16 }}>
-            <button className="btn btn-accent" disabled={!ready || submitting} onClick={submit}>
-              {submitting ? "Creating project…" : "Submit — Create Project"}
-            </button>
-          </div>
+          {actor?.role !== "viewer" && (
+            <div style={{ marginTop: 16 }}>
+              <button className="btn btn-accent" disabled={!ready || submitting} onClick={submit}>
+                {submitting ? "Creating project…" : "Submit — Create Project"}
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>

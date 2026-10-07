@@ -15,7 +15,7 @@ const SECTIONS = [
 // (deferred during the gate, or a post-creation verification that didn't land)
 // routes to the incoming PM through the SAME GapResolution component the
 // estimator used — one generic gap UI, not two parallel ones.
-export default function HandoffBrief({ projectId }) {
+export default function HandoffBrief({ projectId, actor }) {
   const [brief, setBrief] = useState(null);
   const [project, setProject] = useState(null);
   const [gapTasks, setGapTasks] = useState([]);
@@ -70,7 +70,7 @@ export default function HandoffBrief({ projectId }) {
           </div>
           <div className="checklist">
             {gapTasks.map((task) => (
-              <GapResolution key={task.id} task={task} projectId={project.id} onChanged={load} />
+              <GapResolution key={task.id} task={task} projectId={project.id} onChanged={load} actor={actor} />
             ))}
           </div>
         </div>

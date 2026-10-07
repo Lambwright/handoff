@@ -144,7 +144,7 @@ export default function App() {
       <div className="embed-mode">
         <Header user={user} actor={actor} currentHash="" onLogout={handleLogout} embed minimal />
         <div className="container">
-          <ProjectView procoreProjectId={SHELL.procoreProjectId} />
+          <ProjectView procoreProjectId={SHELL.procoreProjectId} actor={actor} />
         </div>
       </div>
     );
@@ -158,9 +158,9 @@ export default function App() {
       <div className="container">
         {route.view === "dashboard" && <Dashboard actor={actor} />}
         {route.view === "bids" && <BidPicker openBidId={route.openBidId} />}
-        {route.view === "gate" && <PurgatoryGate projectId={route.id} />}
+        {route.view === "gate" && <PurgatoryGate projectId={route.id} actor={actor} />}
         {route.view === "assignment" && <Assignment projectId={route.id} />}
-        {route.view === "brief" && <HandoffBrief projectId={route.id} />}
+        {route.view === "brief" && <HandoffBrief projectId={route.id} actor={actor} />}
         {route.view === "admin" && <Admin actor={actor} />}
       </div>
     </div>

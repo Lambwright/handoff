@@ -107,7 +107,7 @@ function ValueInput({ task, draft, setDraft, regionOptions = [], timezoneOptions
   return null; // file / customer have their own dedicated flows below
 }
 
-export default function GapResolution({ task, projectId, project, onChanged, regionOptions = [], timezoneOptions = [] }) {
+export default function GapResolution({ task, projectId, project, onChanged, regionOptions = [], timezoneOptions = [], actor }) {
   const [draft, setDraft] = useState(null);
   const [deferReason, setDeferReason] = useState("");
   const [showDefer, setShowDefer] = useState(false);
@@ -119,6 +119,10 @@ export default function GapResolution({ task, projectId, project, onChanged, reg
 
   const input = TASK_INPUT_TYPES[task.task_type] || "text";
   const locked = task.status === "complete";
+  // Viewers see everything but can't edit — the server already enforces this
+  // (PATCH/verify are estimator/pm/admin only), this just stops the 403.
+  const canEdit = actor?.role !== "viewer";
+  const editable = !locked && canEdit;
 
   async function aiDraft() {
     setDrafting(true);
@@ -219,23 +223,25 @@ export default function GapResolution({ task, projectId, project, onChanged, reg
         <div className="gap-banner">
           <span className="gap-banner-title">Didn't land in Procore</span>
           {task.verify_note}
-          <div>
-            <button className="btn btn-ghost btn-sm" onClick={retryVerify} disabled={busy} style={{ marginTop: 6 }}>
-              Re-check
-            </button>
-          </div>
+          {canEdit && (
+            <div>
+              <button className="btn btn-ghost btn-sm" onClick={retryVerify} disabled={busy} style={{ marginTop: 6 }}>
+                Re-check
+              </button>
+            </div>
+          )}
         </div>
       )}
       {error && <div className="login-error">{error}</div>}
 
-      {!locked && input === "file" && (
+      {editable && input === "file" && (
         <div className="checklist-item-body">
           {task.value?.filename && <div className="row-secondary">Uploaded: {task.value.filename}</div>}
           <input type="file" onChange={uploadFile} disabled={busy} />
         </div>
       )}
 
-      {!locked && input === "scope_draft" && (
+      {editable && input === "scope_draft" && (
         <div className="checklist-item-body">
           <textarea
             rows={6}
@@ -257,7 +263,7 @@ export default function GapResolution({ task, projectId, project, onChanged, reg
         </div>
       )}
 
-      {!locked && input === "forward_verify" && (
+      {editable && input === "forward_verify" && (
         <div className="checklist-item-body">
           {!project?.procore_project_id ? (
             <div className="row-secondary">Available once the project is created.</div>
@@ -279,7 +285,7 @@ export default function GapResolution({ task, projectId, project, onChanged, reg
         </div>
       )}
 
-      {!locked && input === "customer" && (
+      {editable && input === "customer" && (
         <div className="checklist-item-body">
           {task.value?.suggestion?.confidence === "high" && task.value.suggestion.match && (
             <div className="row-secondary">
@@ -320,7 +326,7 @@ export default function GapResolution({ task, projectId, project, onChanged, reg
         </div>
       )}
 
-      {!locked && input !== "file" && input !== "customer" && input !== "forward_verify" && input !== "scope_draft" && (
+      {editable && input !== "file" && input !== "customer" && input !== "forward_verify" && input !== "scope_draft" && (
         <div className="checklist-item-body">
           <ValueInput task={task} draft={draft} setDraft={setDraft} regionOptions={regionOptions} timezoneOptions={timezoneOptions} />
           <div className="checklist-item-actions">
@@ -344,14 +350,14 @@ export default function GapResolution({ task, projectId, project, onChanged, reg
         </div>
       )}
 
-      {!locked && (input === "file" || input === "customer" || input === "forward_verify" || input === "scope_draft") && !showDefer && (
+      {editable && (input === "file" || input === "customer" || input === "forward_verify" || input === "scope_draft") && !showDefer && (
         <div className="checklist-item-actions" style={{ marginTop: 6 }}>
           <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setShowDefer(true)}>
             Defer instead
           </button>
         </div>
       )}
-      {!locked && (input === "file" || input === "customer" || input === "forward_verify" || input === "scope_draft") && showDefer && (
+      {editable && (input === "file" || input === "customer" || input === "forward_verify" || input === "scope_draft") && showDefer && (
         <div className="checklist-item-actions" style={{ marginTop: 6 }}>
           <input placeholder="Why not yet?" value={deferReason} onChange={(e) => setDeferReason(e.target.value)} style={{ flex: 1 }} />
           <button className="btn btn-ghost btn-sm" disabled={busy} onClick={saveDefer}>

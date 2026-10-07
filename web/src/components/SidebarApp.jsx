@@ -9,7 +9,7 @@ import BidPicker from "./BidPicker.jsx";
 // the queue so the estimator can still pick.
 const FULL_VIEW_URL = `${window.location.origin}${window.location.pathname}`;
 
-export default function SidebarApp({ bidId, user, onLogout }) {
+export default function SidebarApp({ bidId, user, actor, onLogout }) {
   const [projectId, setProjectId] = useState(null);
   const [phase, setPhase] = useState(bidId ? "opening" : "picker"); // opening | gate | picker | error
   const [error, setError] = useState(null);
@@ -52,7 +52,7 @@ export default function SidebarApp({ bidId, user, onLogout }) {
             {error}
           </div>
         )}
-        {phase === "gate" && projectId && <PurgatoryGate projectId={projectId} />}
+        {phase === "gate" && projectId && <PurgatoryGate projectId={projectId} actor={actor} />}
         {phase === "picker" && <BidPicker />}
       </div>
     </div>

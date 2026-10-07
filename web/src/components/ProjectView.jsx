@@ -17,7 +17,7 @@ const BRIEF_SECTIONS = [
   ["key_dates", "Key Dates"],
 ];
 
-export default function ProjectView({ procoreProjectId }) {
+export default function ProjectView({ procoreProjectId, actor }) {
   const [handoffId, setHandoffId] = useState(null);
   const [data, setData] = useState(null);
   const [status, setStatus] = useState("loading"); // loading | none | ready | error
@@ -150,7 +150,7 @@ export default function ProjectView({ procoreProjectId }) {
           </div>
           <div className="checklist">
             {gaps.map((task) => (
-              <GapResolution key={task.id} task={task} projectId={handoffId} project={project} onChanged={() => loadSummary(handoffId)} />
+              <GapResolution key={task.id} task={task} projectId={handoffId} project={project} onChanged={() => loadSummary(handoffId)} actor={actor} />
             ))}
           </div>
         </div>
