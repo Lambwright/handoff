@@ -50,6 +50,7 @@ import {
 } from "./gate.js";
 import {
   getAssignmentCandidates,
+  getAssignmentDepartments,
   postAssignmentRecommendation,
   confirmAssignment,
   getPmRoster,
@@ -90,6 +91,7 @@ router.post("/projects/:id/gate/submit", { roles: ["estimator", "admin"] }, subm
 router.post("/projects/:id/scope-draft", { roles: ["estimator", "pm"] }, draftScopeSummary);
 
 router.get("/pm-roster", { roles: [] }, getPmRoster);
+router.get("/assignment-departments", { roles: [] }, getAssignmentDepartments);
 router.get("/assignment/:id/candidates", { roles: ["assignment"] }, getAssignmentCandidates);
 router.post("/assignment/:id/recommend", { roles: ["assignment"] }, postAssignmentRecommendation);
 router.post("/assignment/:id/confirm", { roles: ["assignment"] }, confirmAssignment);

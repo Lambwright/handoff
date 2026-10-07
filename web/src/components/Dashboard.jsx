@@ -17,30 +17,58 @@ function targetHash(project) {
 
 export default function Dashboard({ actor }) {
   const [status, setStatus] = useState("");
+  const [departments, setDepartments] = useState([]);
+  // null until the departments load, so the first query isn't unfiltered by accident
+  const [department, setDepartment] = useState(null);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    api
+      .listAssignmentDepartments()
+      .then((data) => {
+        const list = data.departments || [];
+        setDepartments(list);
+        const mine = actor?.department?.id;
+        setDepartment(mine && list.some((d) => String(d.id) === String(mine)) ? String(mine) : "");
+      })
+      .catch(() => setDepartment(""));
+  }, [actor]);
+
+  useEffect(() => {
+    if (department === null) return;
     setLoading(true);
     setError(null);
     api
-      .listProjects(status)
+      .listProjects(status, department || undefined)
       .then((data) => setProjects(data.projects || []))
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [status]);
+  }, [status, department]);
 
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         {actor?.role !== "pm" && (
-          <div className="tabs" style={{ marginBottom: 0 }}>
-            {STATUSES.map((s) => (
-              <button key={s.key} className={`tab ${status === s.key ? "active" : ""}`} onClick={() => setStatus(s.key)}>
-                {s.label}
-              </button>
-            ))}
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <div className="tabs" style={{ marginBottom: 0 }}>
+              {STATUSES.map((s) => (
+                <button key={s.key} className={`tab ${status === s.key ? "active" : ""}`} onClick={() => setStatus(s.key)}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+            {departments.length > 0 && (
+              <select value={department || ""} onChange={(e) => setDepartment(e.target.value)} aria-label="Department">
+                <option value="">All departments</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         )}
         {(actor?.role === "estimator" || actor?.role === "admin") && (

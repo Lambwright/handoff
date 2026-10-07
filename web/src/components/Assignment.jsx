@@ -131,24 +131,35 @@ export default function Assignment({ projectId }) {
         </div>
       )}
 
-      <div className="candidate-grid">
-        {candidates.map((c) => (
-          <div
-            key={c.pm_id}
-            className={`candidate-card ${selected === c.pm_id ? "selected" : ""} ${recommendation?.recommended_pm === c.pm_id ? "recommended" : ""}`}
-            onClick={() => setSelected(c.pm_id)}
-          >
-            <div className="candidate-name">
-              {c.pm_name || c.pm_id}
-              {recommendation?.recommended_pm === c.pm_id && <span className="recommend-pill">Recommended</span>}
+      {[
+        { group: "main", label: null, list: candidates.filter((c) => c.group === "main") },
+        { group: "bench", label: "Bench — assignable, not on the PM roster", list: candidates.filter((c) => c.group !== "main") },
+      ].map(
+        (section) =>
+          section.list.length > 0 && (
+            <div key={section.group}>
+              {section.label && <div className="field-help" style={{ margin: "16px 0 8px" }}>{section.label}</div>}
+              <div className="candidate-grid">
+                {section.list.map((c) => (
+                  <div
+                    key={c.pm_id}
+                    className={`candidate-card ${selected === c.pm_id ? "selected" : ""} ${recommendation?.recommended_pm === c.pm_id ? "recommended" : ""}`}
+                    onClick={() => setSelected(c.pm_id)}
+                  >
+                    <div className="candidate-name">
+                      {c.pm_name || c.pm_id}
+                      {recommendation?.recommended_pm === c.pm_id && <span className="recommend-pill">Recommended</span>}
+                    </div>
+                    <div className="candidate-stat"><span>Active projects</span><span>{c.active_project_count}</span></div>
+                    <div className="candidate-stat"><span>Contract value</span><span>${c.total_value.toLocaleString()}</span></div>
+                    <div className="candidate-stat"><span>Timeline overlap</span><span>{c.overlap_days}d</span></div>
+                    <div className="candidate-stat"><span>Affinity</span><span>{c.affinity_weight}</span></div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="candidate-stat"><span>Active projects</span><span>{c.active_project_count}</span></div>
-            <div className="candidate-stat"><span>Contract value</span><span>${c.total_value.toLocaleString()}</span></div>
-            <div className="candidate-stat"><span>Timeline overlap</span><span>{c.overlap_days}d</span></div>
-            <div className="candidate-stat"><span>Affinity</span><span>{c.affinity_weight}</span></div>
-          </div>
-        ))}
-      </div>
+          )
+      )}
 
       <button className="btn btn-accent" disabled={!selected || confirming} onClick={confirm} style={{ marginTop: 12 }}>
         {confirming ? "Confirming…" : selected ? `Assign to ${candidates.find((c) => c.pm_id === selected)?.pm_name || selected}` : "Pick a PM"}

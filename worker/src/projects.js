@@ -5,13 +5,27 @@ import { json } from "./http.js";
 import { isPostCreation } from "./checklist.js";
 import { pmMayAccess } from "./auth.js";
 
+// A handoff's department is the one it was most recently assigned to.
 export async function listProjects({ url, sql, auth }) {
   const status = url.searchParams.get("status");
+  const department = url.searchParams.get("department");
   const rows = status
     ? await sql`select * from projects where status = ${status} order by created_at desc`
     : await sql`select * from projects order by created_at desc`;
+
+  let assignedTo = null;
+  if (department) {
+    const latest = await sql`
+      select distinct on (project_id) project_id, assigned_pm from assignment_events
+      where assigned_pm is not null order by project_id, decided_at desc`;
+    assignedTo = new Map(latest.map((r) => [r.project_id, String(r.assigned_pm)]));
+  }
+
   const visible = [];
-  for (const p of rows) if (await pmMayAccess(sql, auth?.actor, p)) visible.push(p);
+  for (const p of rows) {
+    if (assignedTo && assignedTo.get(p.id) !== String(department)) continue;
+    if (await pmMayAccess(sql, auth?.actor, p)) visible.push(p);
+  }
   return json({ projects: visible });
 }
 

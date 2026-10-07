@@ -72,6 +72,7 @@ export function applyAffinity(candidates, affinityRows, { region, client, jobTyp
 // comparison view; it never decides the assignment.
 export function sortForDisplay(candidates) {
   return [...candidates].sort((a, b) => {
+    if (a.group !== b.group && (a.group === "main" || b.group === "main")) return a.group === "main" ? -1 : 1;
     const scoreA = a.affinity_weight * 2 - a.active_project_count - a.overlap_days / 30;
     const scoreB = b.affinity_weight * 2 - b.active_project_count - b.overlap_days / 30;
     return scoreB - scoreA;
@@ -106,13 +107,12 @@ async function loadActiveProjects(env) {
   return hydrated;
 }
 
-// Who counts as a PM is decided by auth-worker's role matrix (appRoles.HANDOFF
-// = 'pm'), looked up via /auth/app/users with the caller's own token. While a
-// person's HANDOFF switch is still "access" (not live), fall back to their
-// users-table role = 'pm'. Each PM's Procore Department comes from auth-worker
-// (user.fields.department, set in HELM). A PM with no department is reported,
-// not silently dropped.
-async function loadPmRoster(env, sql, request) {
+// Everyone who can open HANDOFF, with their Procore Department (set in HELM).
+// `isPm` is the main roster: HANDOFF level 'pm', or — while HANDOFF is not yet
+// live for them — a legacy users-table role of 'pm'. Anyone with a department who
+// isn't a PM is on the bench: assignable and filterable, but not presented as a
+// main option. Department-less PMs are kept so they can be reported.
+async function loadAssignablePeople(env, sql, request) {
   const token = (request.headers.get("Authorization") || "").replace(/^Bearer /, "");
   const res = await env.AUTH_WORKER.fetch(`${env.AUTH_WORKER_URL}/auth/app/users`, {
     method: "POST",
@@ -139,24 +139,26 @@ async function loadPmRoster(env, sql, request) {
         department_name: dept ? dept.name : null,
       };
     })
-    .filter((p) => p.isPm);
+    .filter((p) => p.isPm || p.department_id);
 }
 
-async function loadPmDirectory(env, sql, request) {
-  const roster = await loadPmRoster(env, sql, request);
-  return roster
-    .filter((p) => p.department_id)
-    .map((p) => ({ id: p.department_id, name: p.department_name || p.name }));
+// Every person who can be assigned a handoff: anyone with a department.
+async function loadAssignableDirectory(env, sql, request) {
+  const people = await loadAssignablePeople(env, sql, request);
+  return people.filter((p) => p.department_id);
 }
 
 async function computeCandidates(env, sql, project, request) {
-  const [activeProjects, pmDirectory, affinityRows] = await Promise.all([
+  const [activeProjects, people, affinityRows] = await Promise.all([
     loadActiveProjects(env),
-    loadPmDirectory(env, sql, request),
+    loadAssignableDirectory(env, sql, request),
     sql`select * from pm_affinity`,
   ]);
+  const pmDirectory = people.map((p) => ({ id: p.department_id, name: p.department_name || p.name }));
+  const groupById = new Map(people.map((p) => [p.department_id, p.isPm ? "main" : "bench"]));
 
   let candidates = aggregateWorkload(activeProjects, project.timeline, pmDirectory);
+  candidates = candidates.map((c) => ({ ...c, group: groupById.get(c.pm_id) || "bench" }));
   candidates = applyAffinity(candidates, affinityRows, {
     region: project.address?.state_code || null,
     client: project.customer?.name || null,
@@ -185,11 +187,28 @@ async function computeCandidates(env, sql, project, request) {
 // plus any PM who still has no mapping, so an admin can see the gap. Any
 // authenticated HANDOFF user can read it.
 export async function getPmRoster({ request, env, sql }) {
-  const roster = await loadPmRoster(env, sql, request);
+  const people = await loadAssignablePeople(env, sql, request);
+  const asOption = (p) => ({ id: p.department_id, name: p.department_name || p.name });
   return json({
-    roster: roster.filter((p) => p.department_id).map((p) => ({ id: p.department_id, name: p.department_name || p.name })),
-    unmapped: roster.filter((p) => !p.department_id).map((p) => ({ username: p.username, name: p.name })),
+    roster: people.filter((p) => p.isPm && p.department_id).map(asOption),
+    bench: people.filter((p) => !p.isPm && p.department_id).map(asOption),
+    unmapped: people.filter((p) => p.isPm && !p.department_id).map((p) => ({ username: p.username, name: p.name })),
   });
+}
+
+// Departments that have at least one handoff assigned to them — the only ones
+// worth offering as a filter.
+export async function getAssignmentDepartments({ env, sql, request }) {
+  const [latest, assignable] = await Promise.all([
+    sql`select distinct on (project_id) project_id, assigned_pm from assignment_events
+        where assigned_pm is not null order by project_id, decided_at desc`,
+    loadAssignableDirectory(env, sql, request),
+  ]);
+  const used = new Set(latest.map((r) => String(r.assigned_pm)));
+  const departments = assignable
+    .filter((p) => used.has(String(p.department_id)))
+    .map((p) => ({ id: p.department_id, name: p.department_name || p.name }));
+  return json({ departments });
 }
 
 export async function getAssignmentCandidates({ params, env, sql, request }) {
@@ -207,11 +226,12 @@ export async function postAssignmentRecommendation({ params, env, sql, request }
   if (!project) return json({ error: "not_found" }, 404);
 
   const candidates = await computeCandidates(env, sql, project, request);
+  const mainCandidates = candidates.filter((c) => c.group === "main");
   const [scopeTask] = await sql`select value from gate_tasks where project_id = ${project.id} and task_type = 'scope_summary'`;
 
-  let recommended_pm = candidates[0]?.pm_id || null;
-  let reasoning = "No candidates with workload data — pick manually.";
-  if (candidates.length) {
+  let recommended_pm = mainCandidates[0]?.pm_id || null;
+  let reasoning = "No PMs on the main roster with workload data — pick manually.";
+  if (mainCandidates.length) {
     try {
       const text = await callClaude(env, {
         maxTokens: 500,
@@ -223,7 +243,7 @@ export async function postAssignmentRecommendation({ params, env, sql, request }
           "read in five seconds. Reply with ONLY a JSON object: {\"recommended_pm\":\"<pm_id>\",\"reasoning\":\"...\"}.",
         userMessage: JSON.stringify({
           new_project: { name: project.name, type: project.project_type, timeline: project.timeline, scope: scopeTask?.value || null },
-          candidates: candidates.map((c) => ({
+          candidates: mainCandidates.map((c) => ({
             pm_id: c.pm_id,
             pm_name: c.pm_name,
             active_project_count: c.active_project_count,
@@ -256,10 +276,10 @@ export async function confirmAssignment({ params, request, env, sql, auth }) {
   const [project] = await sql`select * from projects where id = ${params.id}`;
   if (!project) return json({ error: "not_found" }, 404);
 
-  const roster = await loadPmRoster(env, sql, request);
-  const pm = roster.find((p) => p.department_id && String(p.department_id) === String(body.assigned_pm));
+  const assignable = await loadAssignableDirectory(env, sql, request);
+  const pm = assignable.find((p) => String(p.department_id) === String(body.assigned_pm));
   if (!pm) {
-    return json({ error: "invalid_request", detail: "That department isn't a current HANDOFF PM." }, 400);
+    return json({ error: "invalid_request", detail: "That department isn't tied to anyone who can be assigned." }, 400);
   }
 
   const [lastEvent] = await sql`

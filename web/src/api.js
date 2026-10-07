@@ -66,7 +66,14 @@ export const api = {
   refreshBids: () => request("/bids/refresh", { method: "POST", body: {} }),
   openHandoff: (bidId) => request("/handoffs", { method: "POST", body: { bid_id: bidId } }),
 
-  listProjects: (status) => request(`/projects${status ? `?status=${encodeURIComponent(status)}` : ""}`),
+  listProjects: (status, department) => {
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    if (department) params.set("department", department);
+    const qs = params.toString();
+    return request(`/projects${qs ? `?${qs}` : ""}`);
+  },
+  listAssignmentDepartments: () => request("/assignment-departments"),
   getHandoffByProcoreId: (procoreId) => request(`/projects/by-procore/${encodeURIComponent(procoreId)}`),
   getProjectSummary: (projectId) => request(`/projects/${projectId}/summary`),
   getGate: (projectId) => request(`/projects/${projectId}/gate`),
