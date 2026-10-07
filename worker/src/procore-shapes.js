@@ -235,24 +235,18 @@ export const PROVINCE_TIMEZONE = {
   NL: "Newfoundland",
 };
 
-// TODO(sandbox): Ben named "Standard Project Template - Estimate" as the
-// template new HANDOFF projects should use (2026-10-07) — this is its id, NOT
-// the company's default template (562949954018658, a plain "Standard Project
-// Template", confirmed separately via the company settings endpoint). Still
-// need to resolve it: list projects with is_template=true and match the name,
-// or ask Ben to read it off Procore's template admin screen. Left null
-// (project_template_id omitted from create) until then — creating without a
-// template is what caused the "no tools" project Ben hit originally, so this
-// is the one real blocker left on project creation.
-const PROJECT_TEMPLATE_ID = null;
+// CONFIRMED live 2026-10-07 via GET /rest/v1.0/project_templates (a real,
+// documented endpoint — not the generic project list, whose is_template
+// filter is silently ignored same as its other filters). "Standard Project
+// Template - Estimate" is Ben's chosen template for new HANDOFF projects —
+// distinct from the company's plain default template (562949954018658,
+// confirmed separately via the company settings endpoint).
+const PROJECT_TEMPLATE_ID = 562949955171476;
 
-// TODO(sandbox): project_type_id is a real Procore id (see Create Project
-// reference), not the string "Contract" the original guess sent — Procore
-// most likely silently ignored that field entirely. No endpoint found yet to
-// list a company's project types; needs a probe (try bare GET /project_types,
-// or read the id off an existing Contract-type project via the single-project
-// GET's project_type.id) before this can be set.
-const CONTRACT_TYPE_ID = null;
+// CONFIRMED live 2026-10-07 — read off project_type.id on a known Contract
+// project via the single-project GET. The original guess sent the string
+// "Contract" as `type`, a field Procore almost certainly just ignored.
+const CONTRACT_TYPE_ID = 562949953543966;
 
 // ---------------------------------------------------------------------------
 // Project create + admin-field writes
