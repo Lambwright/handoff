@@ -109,10 +109,9 @@ async function loadActiveProjects(env) {
 // Who counts as a PM is decided by auth-worker's role matrix (appRoles.HANDOFF
 // = 'pm'), looked up via /auth/app/users with the caller's own token. While a
 // person's HANDOFF switch is still "access" (not live), fall back to their
-// users-table role = 'pm'. The Procore Department mapping for each PM lives on
-// their users row (procore_department_id/name, keyed by einbau_username) — the
-// Department dropdown itself isn't a PM list, it mixes departed staff and
-// non-person buckets. A PM with no mapping is reported, not silently dropped.
+// users-table role = 'pm'. Each PM's Procore Department comes from auth-worker
+// (user.fields.department, set in HELM). A PM with no department is reported,
+// not silently dropped.
 async function loadPmRoster(env, sql, request) {
   const token = (request.headers.get("Authorization") || "").replace(/^Bearer /, "");
   const res = await env.AUTH_WORKER.fetch(`${env.AUTH_WORKER_URL}/auth/app/users`, {
@@ -123,21 +122,21 @@ async function loadPmRoster(env, sql, request) {
   if (!res.ok) throw new Error(`auth-worker /auth/app/users failed: HTTP ${res.status}`);
   const { users = [] } = await res.json();
 
-  const rows = await sql`
-    select einbau_username, name, role, active, procore_department_id, procore_department_name from users`;
+  const rows = await sql`select einbau_username, role, active from users`;
   const legacy = new Map(rows.map((r) => [r.einbau_username, r]));
 
   return users
     .map((u) => {
       const row = legacy.get(String(u.username).toLowerCase());
       const isPm = u.level === "pm" || (u.level === "access" && row?.role === "pm" && row.active);
+      const dept = u.department && !u.department.missing ? u.department : null;
       return {
         username: u.username,
-        name: row?.procore_department_name || row?.name || u.displayName,
+        name: u.displayName,
         level: u.level,
         isPm,
-        department_id: row?.procore_department_id || null,
-        department_name: row?.procore_department_name || null,
+        department_id: dept ? String(dept.id) : null,
+        department_name: dept ? dept.name : null,
       };
     })
     .filter((p) => p.isPm);

@@ -197,47 +197,6 @@ export const PROCORE_CUSTOM_FIELDS = {
 };
 
 // ---------------------------------------------------------------------------
-// Department — CONFIRMED (Ben, 2026-09-04): Einbau uses the project's
-// Department field on the admin page to indicate who is responsible for it.
-// This is what HANDOFF's PM assignment actually reads/writes — there is no
-// separate "Project Manager" field on the Procore project resource. There is
-// no public Procore endpoint for this dropdown's options (confirmed in
-// punch-worker), so the list is hardcoded, same as punch-worker does it.
-//
-// CAUTION (Ben): this list mixes real current PMs, people who no longer work
-// at Einbau, and non-person buckets ("Project Management", "Back Log", etc).
-// It is NOT a valid PM-candidate list on its own — HANDOFF's assignment engine
-// uses its own `users` table (role='pm', active=true, procore_department_id
-// set) as the curated candidate roster, and only uses this list to resolve a
-// department id to a display name and to populate the admin mapping UI.
-// ---------------------------------------------------------------------------
-export const PROCORE_DEPARTMENTS = [
-  { id: 562949953453259, name: "Warren Wagler" },
-  { id: 562949953487335, name: "Walter Corsetti" },
-  { id: 562949953507599, name: "Sunita Jackson" },
-  { id: 562949953498534, name: "Scot Carter-Nichols" },
-  { id: 562949953453256, name: "Rudi Dyck" },
-  { id: 562949953454803, name: "Project Management" },
-  { id: 562949953454805, name: "Project Logistics" },
-  { id: 562949953454802, name: "Project Estimation" },
-  { id: 562949953453255, name: "Peter Dyck" },
-  { id: 562949953454804, name: "Mel Gabriel" },
-  { id: 562949953492649, name: "Luigi Perna" },
-  { id: 562949953463907, name: "Kevin Smith" },
-  { id: 562949953453258, name: "Hal Rowan" },
-  { id: 562949953489165, name: "Elliot Natovitch" },
-  { id: 562949953482755, name: "Dwayne Rogers" },
-  { id: 562949953473800, name: "Devid Manzke" },
-  { id: 562949953489369, name: "Dave LeBlanc" },
-  { id: 562949953454806, name: "Danny Pagniello" },
-  { id: 562949953495200, name: "Chris Hong" },
-  { id: 562949953453257, name: "Ben Wright" },
-  { id: 562949953453261, name: "Back Log" },
-  { id: 562949953453265, name: "Alfonso Lopez" },
-  { id: 562949953497563, name: "Alex Reid" },
-];
-
-// ---------------------------------------------------------------------------
 // Project regions (Einbau branches) + timezones — for the gate's Region /
 // Timezone tasks. Regions are live (confirmed by probe 2026-09-05:
 // /companies/{co}/project_regions -> [{id, name:"Einbau GTA"}, ...]).
@@ -351,7 +310,8 @@ export const PROJECT = {
   },
 
   // CONFIRMED (Ben, 2026-09-04): assignment is written via the project's
-  // Department field, `department_ids: [id]` — see PROCORE_DEPARTMENTS above.
+  // Department field, `department_ids: [id]`. The id comes from a person's
+  // auth-worker department (see auth.js resolveHandoffActor / pm roster).
   // `departmentId` here is one of that list's numeric ids (resolved from the
   // curated HANDOFF `users` row for the chosen PM, not typed free-form).
   buildAssignedPmPatch({ companyId, departmentId }) {
@@ -366,8 +326,8 @@ export const PROJECT = {
   listPath: () => `/projects`,
 
   // CONFIRMED shape (probe 2026-09-05): `project.departments` is an ARRAY of
-  // {id, name} — e.g. [{"id":562949953498534,"name":"Scot Carter-Nichols"}] —
-  // matching PROCORE_DEPARTMENTS exactly. Only present on the single GET.
+  // {id, name} — e.g. [{"id":562949953498534,"name":"Scot Carter-Nichols"}].
+  // Only present on the single GET.
   // Einbau's admin-page UI is single-select in practice, so the first entry is
   // treated as *the* responsible department/PM. extractPm returns the id as a
   // string to line up with pm_affinity / pm_workload_cache / users without a

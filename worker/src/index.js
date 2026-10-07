@@ -13,7 +13,6 @@
 //   GET  /admin/users                (admin) list HANDOFF users
 //   POST /admin/users                (admin) create/update a HANDOFF user role
 //   DELETE /admin/users/:id          (admin) deactivate
-//   GET  /departments                (any role) the static Procore Department option list
 //   GET  /bids                       (estimator, assignment, admin) Awarded Bid Board projects
 //   POST /handoffs                   (estimator, admin) open a handoff against a bid
 //   GET  /projects                   (any role) dashboard queue, ?status= filter
@@ -38,7 +37,7 @@
 import { json, preflight } from "./http.js";
 import { sqlFor } from "./db.js";
 import { makeRouter } from "./router.js";
-import { getMe, listUsers, upsertUser, deactivateUser, listDepartments, listRegions, listTimezones, procoreProbe } from "./admin.js";
+import { getMe, listUsers, upsertUser, deactivateUser, listRegions, listTimezones, procoreProbe } from "./admin.js";
 import { listAwardedBids, openHandoff, refreshBids } from "./bids.js";
 import { searchCustomerDirectory } from "./matching.js";
 import {
@@ -69,7 +68,6 @@ router.get("/me", getMe);
 router.get("/admin/users", { roles: ["admin"] }, listUsers);
 router.post("/admin/users", { roles: ["admin"] }, upsertUser);
 router.delete("/admin/users/:id", { roles: ["admin"] }, deactivateUser);
-router.get("/departments", { roles: [] }, listDepartments);
 router.get("/regions", { roles: [] }, listRegions);
 router.get("/timezones", { roles: [] }, listTimezones);
 router.post("/admin/procore-probe", { roles: ["admin"] }, procoreProbe); // TEMPORARY — remove after procore-shapes.js is confirmed

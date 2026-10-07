@@ -58,7 +58,6 @@ export const api = {
   listUsers: () => request("/admin/users"),
   upsertUser: (fields) => request("/admin/users", { method: "POST", body: fields }),
   deactivateUser: (id) => request(`/admin/users/${id}`, { method: "DELETE" }),
-  listDepartments: () => request("/departments"),
   listRegions: () => request("/regions"),
   listTimezones: () => request("/timezones"),
   listPmRoster: () => request("/pm-roster"),

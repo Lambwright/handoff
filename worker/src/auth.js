@@ -45,7 +45,7 @@ const HANDOFF_LEVELS = ["admin", "estimator", "assignment", "pm", "viewer"];
 export async function resolveActor(sql, username) {
   if (!username) return null;
   const rows = await sql`
-    select id, einbau_username, name, role, active, procore_department_id, procore_department_name
+    select id, einbau_username, name, role, active
     from users
     where einbau_username = ${String(username).toLowerCase()}`;
   return rows[0] || null;
@@ -57,12 +57,13 @@ export async function resolveActor(sql, username) {
 export async function resolveHandoffActor(sql, user) {
   const username = String(user?.username || "").toLowerCase();
   const appRole = user?.appRoles?.HANDOFF;
+  const department = user?.fields?.department || null;
   if (HANDOFF_LEVELS.includes(appRole)) {
-    return { einbau_username: username, name: user.displayName || username, role: appRole, active: true, source: "matrix" };
+    return { einbau_username: username, name: user.displayName || username, role: appRole, active: true, source: "matrix", department };
   }
   if (appRole === "access") {
     const row = await resolveActor(sql, username);
-    return row && row.active ? { ...row, source: "users" } : null;
+    return row && row.active ? { ...row, source: "users", department } : null;
   }
   return null;
 }
@@ -73,13 +74,12 @@ export async function resolveHandoffActor(sql, user) {
 export async function pmMayAccess(sql, actor, project) {
   if (!actor || actor.role !== "pm") return true;
   if (!project || !["assigned", "complete"].includes(project.status)) return false;
-  const [me] = await sql`select procore_department_id from users where einbau_username = ${actor.einbau_username}`;
-  if (!me?.procore_department_id) return false;
+  if (!actor.department || actor.department.missing) return false;
   const [last] = await sql`
     select assigned_pm from assignment_events
     where project_id = ${project.id} and assigned_pm is not null
     order by decided_at desc limit 1`;
-  return Boolean(last) && String(last.assigned_pm) === String(me.procore_department_id);
+  return Boolean(last) && String(last.assigned_pm) === String(actor.department.id);
 }
 
 // Verify the session AND require a HANDOFF role. `roles` is a list of allowed
