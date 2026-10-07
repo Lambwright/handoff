@@ -133,7 +133,7 @@ export default function Assignment({ projectId }) {
 
       {[
         { group: "main", label: null, list: candidates.filter((c) => c.group === "main") },
-        { group: "bench", label: "Bench — assignable, not on the PM roster", list: candidates.filter((c) => c.group !== "main") },
+        { group: "support", label: "Support — assignable, not on the PM roster", list: candidates.filter((c) => c.group !== "main") },
       ].map(
         (section) =>
           section.list.length > 0 && (

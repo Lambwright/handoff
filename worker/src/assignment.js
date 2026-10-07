@@ -110,7 +110,7 @@ async function loadActiveProjects(env) {
 // Everyone who can open HANDOFF, with their Procore Department (set in HELM).
 // `isPm` is the main roster: HANDOFF level 'pm', or — while HANDOFF is not yet
 // live for them — a legacy users-table role of 'pm'. Anyone with a department who
-// isn't a PM is on the bench: assignable and filterable, but not presented as a
+// isn't a PM is support: assignable and filterable, but not presented as a
 // main option. Department-less PMs are kept so they can be reported.
 async function loadAssignablePeople(env, sql, request) {
   const token = (request.headers.get("Authorization") || "").replace(/^Bearer /, "");
@@ -155,7 +155,7 @@ async function computeCandidates(env, sql, project, request) {
     sql`select * from pm_affinity`,
   ]);
   const pmDirectory = people.map((p) => ({ id: p.department_id, name: p.department_name || p.name }));
-  const groupById = new Map(people.map((p) => [p.department_id, p.isPm ? "main" : "bench"]));
+  const groupById = new Map(people.map((p) => [p.department_id, p.isPm ? "main" : "support"]));
 
   // aggregateWorkload also adds any department seen on an active project, so
   // drop anything not tied to a person (departed staff, Back Log, etc.).
@@ -195,7 +195,7 @@ export async function getPmRoster({ request, env, sql }) {
   const asOption = (p) => ({ id: p.department_id, name: p.department_name || p.name });
   return json({
     roster: people.filter((p) => p.isPm && p.department_id).map(asOption),
-    bench: people.filter((p) => !p.isPm && p.department_id).map(asOption),
+    support: people.filter((p) => !p.isPm && p.department_id).map(asOption),
     unmapped: people.filter((p) => p.isPm && !p.department_id).map((p) => ({ username: p.username, name: p.name })),
   });
 }
