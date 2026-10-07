@@ -179,7 +179,7 @@ export const STAGES = {
 // straight off a live project:
 //   custom_field_73165           -> {data_type:"vendor", value:{id, label}}   (Customer)
 //   custom_field_562949953929326 -> {data_type:"string", value:"tbd"}         (PO Number)
-//   custom_field_562949953942386 -> {data_type:"lov_entry", value:{id,label}} (Currency, unused here)
+//   custom_field_562949953942386 -> {data_type:"lov_entry", value:{id,label}} (Currency; CURRENCY_OPTIONS below)
 //   custom_field_562949953962855 -> {data_type:"people", value:{id,user_ids}} (PM, front-page field)
 // Reads come back nested under `project.custom_fields.custom_field_<id>.value`;
 // WRITES go as flat project properties (`project.custom_field_<id> = <id|string>`),
@@ -195,6 +195,17 @@ export const PROCORE_CUSTOM_FIELDS = {
   currency: 562949953942386,
   pm: 562949953962855,
 };
+
+// CONFIRMED live 2026-10-07 — read off the currency field on two real projects
+// (a CAD one and the one US project in the account). No multi-currency Procore
+// setting is in use, so this is a label only, not a value this account expects
+// to drive accounting behavior. Not wired into any gate task yet — pending a
+// decision on where payment-terms/fiscal-year live alongside it (LEDGER vs.
+// HANDOFF-set-as-project-default, Ben 2026-10-07).
+export const CURRENCY_OPTIONS = [
+  { id: 562949954003313, name: "CAD $" },
+  { id: 562949954003314, name: "USD $" },
+];
 
 // ---------------------------------------------------------------------------
 // Project regions (Einbau branches) + timezones — for the gate's Region /
