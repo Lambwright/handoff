@@ -32,6 +32,7 @@ export default function BidPicker({ openBidId } = {}) {
   const [error, setError] = useState(null);
   const [opening, setOpening] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     if (!openBidId) return;
@@ -102,13 +103,28 @@ export default function BidPicker({ openBidId } = {}) {
     }
   }
 
+  const q = query.trim().toLowerCase();
+  const visibleBids = q
+    ? bids.filter((bid) =>
+        [bid.name, bid.project_number, bid.customer_name, bid.city, bid.state_code]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q))
+      )
+    : bids;
+
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
         <div className="card-title" style={{ margin: 0 }}>
           Awarded Bids — ready to hand off
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <input
+            placeholder="Search name, bid #, customer, city…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            style={{ width: 220 }}
+          />
           <span className="row-secondary">
             {scanInProgress ? "scan in progress…" : `full sync ${timeAgo(refreshedAt)}`}
           </span>
@@ -129,9 +145,12 @@ export default function BidPicker({ openBidId } = {}) {
           Nothing waiting — every Awarded bid has a handoff, or the cache is stale. Hit Refresh to rescan the Bid Board.
         </div>
       )}
+      {!loading && bids.length > 0 && visibleBids.length === 0 && (
+        <div className="empty-state">No bids match "{query}".</div>
+      )}
 
       <div className="row-list">
-        {bids.map((bid) => (
+        {visibleBids.map((bid) => (
           <div key={bid.bid_id} className="row-item" style={{ gridTemplateColumns: "2fr 1fr 1fr 120px 140px", cursor: "default" }}>
             <div>
               <div className="row-primary">{bid.name || "(unnamed bid)"}</div>

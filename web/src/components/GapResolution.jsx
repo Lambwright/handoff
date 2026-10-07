@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api.js";
 
 // ONE generic item component, reused on both sides of the process (kickoff
@@ -177,11 +177,22 @@ export default function GapResolution({ task, projectId, project, onChanged, reg
     }
   }
 
-  async function runCustomerSearch() {
-    if (customerQuery.trim().length < 2) return;
-    const { candidates } = await api.searchCustomers(customerQuery);
-    setCustomerResults(candidates);
-  }
+  // Live, debounced search — same pattern as SCOUT/INTAKE's directory lookup
+  // (300ms, 3-char minimum) instead of a manual Search click.
+  const customerSearchTimer = useRef(null);
+  useEffect(() => {
+    clearTimeout(customerSearchTimer.current);
+    const query = customerQuery.trim();
+    if (query.length < 3) {
+      setCustomerResults(null);
+      return;
+    }
+    customerSearchTimer.current = setTimeout(async () => {
+      const { candidates } = await api.searchCustomers(query);
+      setCustomerResults(candidates);
+    }, 300);
+    return () => clearTimeout(customerSearchTimer.current);
+  }, [customerQuery]);
 
   async function retryVerify() {
     setBusy(true);
@@ -292,9 +303,6 @@ export default function GapResolution({ task, projectId, project, onChanged, reg
           )}
           <div className="checklist-item-actions" style={{ marginTop: 6 }}>
             <input placeholder="Search the Directory…" value={customerQuery} onChange={(e) => setCustomerQuery(e.target.value)} style={{ width: 220 }} />
-            <button className="btn btn-ghost btn-sm" onClick={runCustomerSearch} disabled={busy}>
-              Search
-            </button>
           </div>
           <div className="field-help">
             The customer must already exist in the Procore Directory — SCOUT / INTAKE handle adding new ones.
