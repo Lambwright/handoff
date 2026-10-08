@@ -39,8 +39,12 @@ export async function getProcoreToken(env, { force = false } = {}) {
 // "/projects/123" or "/companies/562949953508586/project_stages". `query` is an
 // optional object of query params. Retries once on 401 with a forced-fresh token.
 //
-// Returns { ok, status, data } and never throws on a non-2xx — callers decide
-// what a failure means (a check-before-write can treat 404 as "not there yet").
+// Returns { ok, status, data, headers } and never throws on a non-2xx —
+// callers decide what a failure means (a check-before-write can treat 404 as
+// "not there yet"). `headers` is every response header as a plain object —
+// added 2026-10-07 to check whether Procore sends rate-limit headers (LEDGER
+// was hitting 429s and asked); nothing currently reads it beyond that probe,
+// but it's cheap to keep for whoever needs it next.
 export async function procoreFetch(env, path, { method = "GET", body, version = "v1.0", query } = {}) {
   let token = await getProcoreToken(env);
 
@@ -80,7 +84,7 @@ export async function procoreFetch(env, path, { method = "GET", body, version = 
       data = { raw: text };
     }
   }
-  return { ok: res.ok, status: res.status, data };
+  return { ok: res.ok, status: res.status, data, headers: Object.fromEntries(res.headers.entries()) };
 }
 
 // Follows Procore's Link header pagination and returns the concatenated array.
