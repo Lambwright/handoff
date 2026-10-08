@@ -5,7 +5,7 @@
 import { json } from "./http.js";
 import { verifyIdentity, resolveHandoffActor } from "./auth.js";
 import { procoreFetch } from "./procore.js";
-import { REGIONS, TIMEZONES } from "./procore-shapes.js";
+import { REGIONS, TIMEZONES, PROCORE_CUSTOM_FIELDS, fiscalYearOptionsPath } from "./procore-shapes.js";
 
 // TEMPORARY diagnostic — an authenticated passthrough to an arbitrary Procore
 // REST path, used to nail down the real endpoint/response shapes the
@@ -52,6 +52,17 @@ export async function listRegions({ env }) {
 // GET /timezones — the fixed list (no useful Procore endpoint).
 export async function listTimezones() {
   return json({ timezones: TIMEZONES });
+}
+
+// GET /fiscal-year-options — live, NOT cached/hardcoded: Ben relabels these
+// entries as part of an annual portfolio cleanup (see procore-shapes.js), so
+// a stale snapshot would silently point at the wrong year. Whoever renders
+// the gate's Fiscal Year field should match "Current" by name from this list
+// at the moment they need a default, not remember an id from an earlier call.
+export async function listFiscalYearOptions({ env }) {
+  const { ok, data } = await procoreFetch(env, fiscalYearOptionsPath(PROCORE_CUSTOM_FIELDS.fiscalYear), { version: "v1.0", query: { company_id: env.PROCORE_COMPANY_ID } });
+  const options = ok && Array.isArray(data) ? data.map((o) => ({ id: String(o.id), name: o.label })) : [];
+  return json({ options });
 }
 
 export async function listUsers({ sql }) {

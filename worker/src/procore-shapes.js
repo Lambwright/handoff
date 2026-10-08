@@ -223,23 +223,16 @@ export const PAYMENT_TERMS_OPTIONS = [
   { id: 562949953943036, name: "Net 60" },
 ];
 
-// CAUTION: id 562949954242559 is "2026", NOT "Current" (id 562949954242560 is
-// "Current") — confirmed against this live endpoint 2026-10-07. LEDGER's own
-// reply the same day claimed id 562949954242559 meant "Current" on every
-// project it sampled; that's the wrong id for that label. Flagged back to the
-// LEDGER session — if its dashboard is keying off that id to mean "Current",
-// its fiscal-year filter/display may be mismatching 2026 projects. No 2027
-// entry exists in this list at all — a real gap if any project needs it,
-// worth a heads-up to whoever manages this field in Procore.
-export const FISCAL_YEAR_OPTIONS = [
-  { id: 562949954242560, name: "Current" }, // Ben's default
-  { id: 562949954242558, name: "2025" },
-  { id: 562949954242559, name: "2026" },
-  { id: 562949954242561, name: "2024" },
-  { id: 562949954242562, name: "2028" },
-  { id: 562949954242563, name: "2029" },
-  { id: 562949954242564, name: "2030" },
-];
+// NOT hardcoded, unlike CURRENCY_OPTIONS/PAYMENT_TERMS_OPTIONS above — Ben
+// actively RELABELS these entries' names as part of an annual portfolio
+// cleanup (2026-10-07: the id that meant "2027" became "Current", and the
+// one that meant "Current" became "2026", so stale projects are easy to spot
+// after a fiscal-year rollover). A snapshot here would silently go wrong
+// every time that happens — this confused both HANDOFF and LEDGER on the
+// very first check, since LEDGER had sampled before the relabel and HANDOFF
+// probed after. Fetch live via fiscalYearOptionsPath and match "Current" by
+// label at write time, never by a remembered id.
+export const fiscalYearOptionsPath = (fieldId) => `/custom_field_definitions/${fieldId}/custom_field_lov_entries`;
 
 // ---------------------------------------------------------------------------
 // Project regions (Einbau branches) + timezones — for the gate's Region /

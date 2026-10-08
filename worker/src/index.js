@@ -37,7 +37,7 @@
 import { json, preflight } from "./http.js";
 import { sqlFor } from "./db.js";
 import { makeRouter } from "./router.js";
-import { getMe, listUsers, upsertUser, deactivateUser, listRegions, listTimezones, procoreProbe } from "./admin.js";
+import { getMe, listUsers, upsertUser, deactivateUser, listRegions, listTimezones, listFiscalYearOptions, procoreProbe } from "./admin.js";
 import { listAwardedBids, openHandoff, refreshBids } from "./bids.js";
 import { searchCustomerDirectory } from "./matching.js";
 import {
@@ -71,6 +71,7 @@ router.post("/admin/users", { roles: ["admin"] }, upsertUser);
 router.delete("/admin/users/:id", { roles: ["admin"] }, deactivateUser);
 router.get("/regions", { roles: [] }, listRegions);
 router.get("/timezones", { roles: [] }, listTimezones);
+router.get("/fiscal-year-options", { roles: [] }, listFiscalYearOptions);
 router.post("/admin/procore-probe", { roles: ["admin"] }, procoreProbe); // TEMPORARY — remove after procore-shapes.js is confirmed
 
 router.get("/bids", { roles: ["estimator", "assignment"] }, listAwardedBids);
