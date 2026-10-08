@@ -5,7 +5,7 @@
 import { json } from "./http.js";
 import { verifyIdentity, resolveHandoffActor } from "./auth.js";
 import { procoreFetch } from "./procore.js";
-import { REGIONS, TIMEZONES, PROCORE_CUSTOM_FIELDS, fiscalYearOptionsPath } from "./procore-shapes.js";
+import { REGIONS, TIMEZONES, PROCORE_CUSTOM_FIELDS, fiscalYearOptionsPath, CURRENCY_OPTIONS, PAYMENT_TERMS_OPTIONS } from "./procore-shapes.js";
 
 // TEMPORARY diagnostic — an authenticated passthrough to an arbitrary Procore
 // REST path, used to nail down the real endpoint/response shapes the
@@ -52,6 +52,15 @@ export async function listRegions({ env }) {
 // GET /timezones — the fixed list (no useful Procore endpoint).
 export async function listTimezones() {
   return json({ timezones: TIMEZONES });
+}
+
+// GET /currency-options, /payment-terms-options — stable, hardcoded (confirmed
+// 2026-10-07, unlike Fiscal Year these aren't actively relabeled).
+export async function listCurrencyOptions() {
+  return json({ options: CURRENCY_OPTIONS });
+}
+export async function listPaymentTermsOptions() {
+  return json({ options: PAYMENT_TERMS_OPTIONS });
 }
 
 // GET /fiscal-year-options — live, NOT cached/hardcoded: Ben relabels these

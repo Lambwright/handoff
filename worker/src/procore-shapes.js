@@ -370,6 +370,20 @@ export const PROJECT = {
     return { company_id: companyId, project: { time_zone: timezone } };
   },
 
+  // All three lov_entry custom fields — flat scalar id, same shape as
+  // buildPoNumberPatch, confirmed 2026-10-07/08 (currency/payment terms
+  // options, fiscal year live-fetched — see procore-shapes.js's
+  // CURRENCY_OPTIONS/PAYMENT_TERMS_OPTIONS/fiscalYearOptionsPath above).
+  buildCurrencyPatch({ companyId, currencyId }) {
+    return { company_id: companyId, project: { [`custom_field_${PROCORE_CUSTOM_FIELDS.currency}`]: Number(currencyId) } };
+  },
+  buildPaymentTermsPatch({ companyId, paymentTermsId }) {
+    return { company_id: companyId, project: { [`custom_field_${PROCORE_CUSTOM_FIELDS.paymentTerms}`]: Number(paymentTermsId) } };
+  },
+  buildFiscalYearPatch({ companyId, fiscalYearId }) {
+    return { company_id: companyId, project: { [`custom_field_${PROCORE_CUSTOM_FIELDS.fiscalYear}`]: Number(fiscalYearId) } };
+  },
+
   // CONFIRMED (Ben, 2026-09-04): assignment is written via the project's
   // Department field, `department_ids: [id]`. The id comes from a person's
   // auth-worker department (see auth.js resolveHandoffActor / pm roster).

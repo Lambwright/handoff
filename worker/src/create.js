@@ -153,10 +153,56 @@ async function setTimezone(env, sql, project, { force = false } = {}) {
   return null;
 }
 
+async function setCurrency(env, sql, project, { force = false } = {}) {
+  if ((!force && project.create_progress?.currency_set) || !project.currency_id) return null;
+  const { ok, status, data } = await procoreFetch(env, PROJECT.patchPath(project.procore_project_id, env.PROCORE_COMPANY_ID), {
+    method: "PATCH",
+    version: PROJECT.version,
+    body: PROJECT.buildCurrencyPatch({ companyId: env.PROCORE_COMPANY_ID, currencyId: project.currency_id }),
+  });
+  if (!ok) return `currency PATCH failed (HTTP ${status}): ${JSON.stringify(data).slice(0, 300)}`;
+  await markProgress(sql, project.id, { currency_set: true });
+  return null;
+}
+
+async function setPaymentTerms(env, sql, project, { force = false } = {}) {
+  if ((!force && project.create_progress?.payment_terms_set) || !project.payment_terms_id) return null;
+  const { ok, status, data } = await procoreFetch(env, PROJECT.patchPath(project.procore_project_id, env.PROCORE_COMPANY_ID), {
+    method: "PATCH",
+    version: PROJECT.version,
+    body: PROJECT.buildPaymentTermsPatch({ companyId: env.PROCORE_COMPANY_ID, paymentTermsId: project.payment_terms_id }),
+  });
+  if (!ok) return `payment terms PATCH failed (HTTP ${status}): ${JSON.stringify(data).slice(0, 300)}`;
+  await markProgress(sql, project.id, { payment_terms_set: true });
+  return null;
+}
+
+async function setFiscalYear(env, sql, project, { force = false } = {}) {
+  if ((!force && project.create_progress?.fiscal_year_set) || !project.fiscal_year_id) return null;
+  const { ok, status, data } = await procoreFetch(env, PROJECT.patchPath(project.procore_project_id, env.PROCORE_COMPANY_ID), {
+    method: "PATCH",
+    version: PROJECT.version,
+    body: PROJECT.buildFiscalYearPatch({ companyId: env.PROCORE_COMPANY_ID, fiscalYearId: project.fiscal_year_id }),
+  });
+  if (!ok) return `fiscal year PATCH failed (HTTP ${status}): ${JSON.stringify(data).slice(0, 300)}`;
+  await markProgress(sql, project.id, { fiscal_year_set: true });
+  return null;
+}
+
 // Exposed so gate.js can re-push ONE field immediately when a post-creation gap
 // (a deferred item, resolved late) is filled in — same write logic the pipeline
 // itself uses, just called with force:true against a single field.
-export const FIELD_PUSHERS = { address: setAddress, customer: setCustomer, po_number: setPoNumber, timeline: setTimeline, region: setRegion, timezone: setTimezone };
+export const FIELD_PUSHERS = {
+  address: setAddress,
+  customer: setCustomer,
+  po_number: setPoNumber,
+  timeline: setTimeline,
+  region: setRegion,
+  timezone: setTimezone,
+  currency: setCurrency,
+  payment_terms: setPaymentTerms,
+  fiscal_year: setFiscalYear,
+};
 
 // Uploads ONE housed PO document into the now-existing Procore project's
 // Documents tool. (Tender correspondence is NOT pushed by HANDOFF — the
@@ -267,7 +313,7 @@ export async function runCreatePipeline(env, sql, projectId, actorUsername) {
     return { project, errors, complete: false };
   }
 
-  for (const step of [setAddress, setCustomer, setPoNumber, setTimeline, setRegion, setTimezone]) {
+  for (const step of [setAddress, setCustomer, setPoNumber, setTimeline, setRegion, setTimezone, setCurrency, setPaymentTerms, setFiscalYear]) {
     const err = await step(env, sql, project);
     if (err) errors.push(err);
     project = await reload(sql, projectId);

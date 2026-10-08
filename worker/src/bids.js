@@ -15,7 +15,7 @@
 
 import { json } from "./http.js";
 import { procoreFetch } from "./procore.js";
-import { BID_BOARD, PROVINCE_TIMEZONE } from "./procore-shapes.js";
+import { BID_BOARD, PROVINCE_TIMEZONE, CURRENCY_OPTIONS, PAYMENT_TERMS_OPTIONS, PROCORE_CUSTOM_FIELDS, fiscalYearOptionsPath } from "./procore-shapes.js";
 import { normalizeType, buildGateTasks } from "./checklist.js";
 import { suggestCustomerMatch } from "./matching.js";
 
@@ -226,6 +226,25 @@ export async function openHandoff({ request, env, sql, auth }) {
             ${auth.actor.einbau_username})
     returning *`;
 
+  // Currency/payment-terms default by name, not position — explicit beats
+  // "whatever's first in the array". Fiscal year's "Current" label moves (Ben
+  // relabels it yearly, see procore-shapes.js), so it's resolved live here
+  // rather than ever hardcoded — best-effort; the estimator just picks
+  // manually if this lookup fails.
+  const currencyDefault = CURRENCY_OPTIONS.find((o) => o.name === "CAD $") || null;
+  const paymentTermsDefault = PAYMENT_TERMS_OPTIONS.find((o) => o.name === "Net 15") || null;
+  let fiscalYearDefault = null;
+  try {
+    const { ok, data } = await procoreFetch(env, fiscalYearOptionsPath(PROCORE_CUSTOM_FIELDS.fiscalYear), {
+      version: "v1.0",
+      query: { company_id: env.PROCORE_COMPANY_ID },
+    });
+    const cur = ok && Array.isArray(data) ? data.find((o) => o.label === "Current") : null;
+    if (cur) fiscalYearDefault = { id: String(cur.id), name: cur.label };
+  } catch (e) {
+    // best-effort
+  }
+
   const tasks = buildGateTasks(projectType);
   // Pre-fill the tasks we already have data for (address off the bid) so the
   // estimator confirms rather than retypes. Timeline isn't on the bid, so it
@@ -235,6 +254,9 @@ export async function openHandoff({ request, env, sql, auth }) {
     let seedValue = null;
     if (t.task_type === "address") seedValue = draft.address;
     else if (t.task_type === "customer") seedValue = customerSeed;
+    else if (t.task_type === "currency" && currencyDefault) seedValue = currencyDefault;
+    else if (t.task_type === "payment_terms" && paymentTermsDefault) seedValue = paymentTermsDefault;
+    else if (t.task_type === "fiscal_year" && fiscalYearDefault) seedValue = fiscalYearDefault;
     else if (t.task_type === "timezone" && tzGuess) seedValue = { name: tzGuess };
     await sql`
       insert into gate_tasks (project_id, task_type, label, required, verify_backing, gap_owner, status, value)

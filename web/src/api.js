@@ -60,6 +60,9 @@ export const api = {
   deactivateUser: (id) => request(`/admin/users/${id}`, { method: "DELETE" }),
   listRegions: () => request("/regions"),
   listTimezones: () => request("/timezones"),
+  listCurrencyOptions: () => request("/currency-options"),
+  listPaymentTermsOptions: () => request("/payment-terms-options"),
+  listFiscalYearOptions: () => request("/fiscal-year-options"),
   listPmRoster: () => request("/pm-roster"),
 
   listBids: () => request("/bids"),

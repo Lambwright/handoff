@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api.js";
 import GapResolution from "./GapResolution.jsx";
+import { useGateOptions } from "../useGateOptions.js";
 
 // The Procore project-level Full Screen tool. Given a Procore project id, shows
 // the incoming PM everything HANDOFF holds for that project: the AI handoff
@@ -22,6 +23,7 @@ export default function ProjectView({ procoreProjectId, actor }) {
   const [data, setData] = useState(null);
   const [status, setStatus] = useState("loading"); // loading | none | ready | error
   const [error, setError] = useState(null);
+  const gateOptions = useGateOptions();
 
   const loadSummary = useCallback((id) => {
     return api
@@ -150,7 +152,7 @@ export default function ProjectView({ procoreProjectId, actor }) {
           </div>
           <div className="checklist">
             {gaps.map((task) => (
-              <GapResolution key={task.id} task={task} projectId={handoffId} project={project} onChanged={() => loadSummary(handoffId)} actor={actor} />
+              <GapResolution key={task.id} task={task} projectId={handoffId} project={project} onChanged={() => loadSummary(handoffId)} actor={actor} {...gateOptions} />
             ))}
           </div>
         </div>

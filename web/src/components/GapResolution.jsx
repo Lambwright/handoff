@@ -15,6 +15,9 @@ const TASK_INPUT_TYPES = {
   customer: "customer",
   timezone: "select",
   region: "select",
+  currency: "select",
+  payment_terms: "select",
+  fiscal_year: "select",
   timeline: "dates",
   po_number: "text",
   po_document: "file",
@@ -23,27 +26,30 @@ const TASK_INPUT_TYPES = {
   estimates_reviewed: "text",
 };
 
-const SELECT_OPTIONS_KEY = { region: "regionOptions", timezone: "timezoneOptions" };
+// region/currency/payment_terms/fiscal_year are real Procore ids, keyed by
+// {id, name}; timezone has no id, just Rails' zone name string, keyed by name.
+const ID_KEYED_SELECTS = new Set(["region", "currency", "payment_terms", "fiscal_year"]);
 
-function ValueInput({ task, draft, setDraft, regionOptions = [], timezoneOptions = [] }) {
+function ValueInput({ task, draft, setDraft, regionOptions = [], timezoneOptions = [], currencyOptions = [], paymentTermsOptions = [], fiscalYearOptions = [] }) {
   const input = TASK_INPUT_TYPES[task.task_type] || "text";
 
   if (input === "select") {
-    const opts = task.task_type === "region" ? regionOptions : timezoneOptions;
-    // region value is {id, name}; timezone value is {name}
+    const optsByType = { region: regionOptions, timezone: timezoneOptions, currency: currencyOptions, payment_terms: paymentTermsOptions, fiscal_year: fiscalYearOptions };
+    const opts = optsByType[task.task_type] || [];
+    const idKeyed = ID_KEYED_SELECTS.has(task.task_type);
     const cur = draft ?? task.value ?? {};
-    const curKey = task.task_type === "region" ? cur.id || "" : cur.name || "";
+    const curKey = idKeyed ? cur.id || "" : cur.name || "";
     return (
       <select
         value={curKey}
         onChange={(e) => {
-          const o = opts.find((x) => String(task.task_type === "region" ? x.id : x.name) === e.target.value);
-          setDraft(task.task_type === "region" ? { id: o?.id, name: o?.name } : { name: o?.name || e.target.value });
+          const o = opts.find((x) => String(idKeyed ? x.id : x.name) === e.target.value);
+          setDraft(idKeyed ? { id: o?.id, name: o?.name } : { name: o?.name || e.target.value });
         }}
       >
         <option value="">— select —</option>
         {opts.map((o) => {
-          const val = task.task_type === "region" ? String(o.id) : o.name;
+          const val = idKeyed ? String(o.id) : o.name;
           return (
             <option key={val} value={val}>
               {o.name}
@@ -107,7 +113,18 @@ function ValueInput({ task, draft, setDraft, regionOptions = [], timezoneOptions
   return null; // file / customer have their own dedicated flows below
 }
 
-export default function GapResolution({ task, projectId, project, onChanged, regionOptions = [], timezoneOptions = [], actor }) {
+export default function GapResolution({
+  task,
+  projectId,
+  project,
+  onChanged,
+  regionOptions = [],
+  timezoneOptions = [],
+  currencyOptions = [],
+  paymentTermsOptions = [],
+  fiscalYearOptions = [],
+  actor,
+}) {
   const [draft, setDraft] = useState(null);
   const [deferReason, setDeferReason] = useState("");
   const [showDefer, setShowDefer] = useState(false);
@@ -328,7 +345,16 @@ export default function GapResolution({ task, projectId, project, onChanged, reg
 
       {editable && input !== "file" && input !== "customer" && input !== "forward_verify" && input !== "scope_draft" && (
         <div className="checklist-item-body">
-          <ValueInput task={task} draft={draft} setDraft={setDraft} regionOptions={regionOptions} timezoneOptions={timezoneOptions} />
+          <ValueInput
+            task={task}
+            draft={draft}
+            setDraft={setDraft}
+            regionOptions={regionOptions}
+            timezoneOptions={timezoneOptions}
+            currencyOptions={currencyOptions}
+            paymentTermsOptions={paymentTermsOptions}
+            fiscalYearOptions={fiscalYearOptions}
+          />
           <div className="checklist-item-actions">
             <button className="btn btn-accent btn-sm" disabled={busy} onClick={() => complete(draft ?? task.value)}>
               {task.status === "pending" ? "Confirm" : "Save"}

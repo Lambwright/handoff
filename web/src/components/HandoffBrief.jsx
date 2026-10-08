@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api.js";
 import GapResolution from "./GapResolution.jsx";
+import { useGateOptions } from "../useGateOptions.js";
 
 const SECTIONS = [
   ["scope", "Scope"],
@@ -21,6 +22,7 @@ export default function HandoffBrief({ projectId, actor }) {
   const [gapTasks, setGapTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const gateOptions = useGateOptions();
 
   const load = useCallback(() => {
     setError(null);
@@ -70,7 +72,7 @@ export default function HandoffBrief({ projectId, actor }) {
           </div>
           <div className="checklist">
             {gapTasks.map((task) => (
-              <GapResolution key={task.id} task={task} projectId={project.id} onChanged={load} actor={actor} />
+              <GapResolution key={task.id} task={task} projectId={project.id} onChanged={load} actor={actor} {...gateOptions} />
             ))}
           </div>
         </div>

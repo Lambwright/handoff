@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../api.js";
 import GapResolution from "./GapResolution.jsx";
 import { getShellContext } from "../shell.js";
+import { useGateOptions } from "../useGateOptions.js";
 
 // In the Procore side panel, the assignment / brief steps (assignment team's
 // job, wide Recharts UI) open in the full view rather than trying to fit the
@@ -25,17 +26,11 @@ const POST_CREATION = new Set(["tender_correspondence", "scope_summary", "estima
 export default function PurgatoryGate({ projectId, actor }) {
   const [project, setProject] = useState(null);
   const [tasks, setTasks] = useState([]);
-  const [regionOptions, setRegionOptions] = useState([]);
-  const [timezoneOptions, setTimezoneOptions] = useState([]);
+  const { regionOptions, timezoneOptions, currencyOptions, paymentTermsOptions, fiscalYearOptions } = useGateOptions();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState(null);
-
-  useEffect(() => {
-    api.listRegions().then((d) => setRegionOptions(d.regions || [])).catch(() => {});
-    api.listTimezones().then((d) => setTimezoneOptions((d.timezones || []).map((t) => ({ id: t, name: t })))).catch(() => {});
-  }, []);
 
   const load = useCallback(() => {
     setError(null);
@@ -125,7 +120,7 @@ export default function PurgatoryGate({ projectId, actor }) {
           </div>
           <div className="checklist">
             {postTasks.map((task) => (
-              <GapResolution key={task.id} task={task} projectId={projectId} project={project} onChanged={load} regionOptions={regionOptions} timezoneOptions={timezoneOptions} actor={actor} />
+              <GapResolution key={task.id} task={task} projectId={projectId} project={project} onChanged={load} regionOptions={regionOptions} timezoneOptions={timezoneOptions} currencyOptions={currencyOptions} paymentTermsOptions={paymentTermsOptions} fiscalYearOptions={fiscalYearOptions} actor={actor} />
             ))}
           </div>
         </div>
@@ -155,7 +150,7 @@ export default function PurgatoryGate({ projectId, actor }) {
 
           <div className="checklist">
             {preTasks.map((task) => (
-              <GapResolution key={task.id} task={task} projectId={projectId} project={project} onChanged={load} regionOptions={regionOptions} timezoneOptions={timezoneOptions} actor={actor} />
+              <GapResolution key={task.id} task={task} projectId={projectId} project={project} onChanged={load} regionOptions={regionOptions} timezoneOptions={timezoneOptions} currencyOptions={currencyOptions} paymentTermsOptions={paymentTermsOptions} fiscalYearOptions={fiscalYearOptions} actor={actor} />
             ))}
           </div>
 

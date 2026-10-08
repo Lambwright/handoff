@@ -68,6 +68,9 @@ create table projects (
   po_number text,
   region_id text,                         -- Procore project_region_id (Einbau branch)
   timezone text,                          -- Procore time_zone name
+  currency_id text,                       -- Procore custom_field_562949953942386 LOV entry id
+  payment_terms_id text,                  -- Procore custom_field_562949953933248 LOV entry id
+  fiscal_year_id text,                    -- Procore custom_field_562949954054370 LOV entry id -- resolve "Current" live, never cache the id (Ben relabels it)
   timeline jsonb,                         -- {start_date, end_date} confirmed during the gate
   inbound_email_address text,             -- the Procore project's Emails-tool inbox (set at creation)
   create_progress jsonb not null default '{}'::jsonb,  -- which create.js steps have succeeded

@@ -78,6 +78,9 @@ export async function patchGateTask({ params, request, env, sql, auth }) {
   else if (task.task_type === "po_number") projectPatch = sql`update projects set po_number = ${v?.po_number ?? v}, updated_at = now() where id = ${task.project_id} returning *`;
   else if (task.task_type === "region") projectPatch = sql`update projects set region_id = ${v?.id ?? v}, updated_at = now() where id = ${task.project_id} returning *`;
   else if (task.task_type === "timezone") projectPatch = sql`update projects set timezone = ${v?.name ?? v}, updated_at = now() where id = ${task.project_id} returning *`;
+  else if (task.task_type === "currency") projectPatch = sql`update projects set currency_id = ${v?.id ?? v}, updated_at = now() where id = ${task.project_id} returning *`;
+  else if (task.task_type === "payment_terms") projectPatch = sql`update projects set payment_terms_id = ${v?.id ?? v}, updated_at = now() where id = ${task.project_id} returning *`;
+  else if (task.task_type === "fiscal_year") projectPatch = sql`update projects set fiscal_year_id = ${v?.id ?? v}, updated_at = now() where id = ${task.project_id} returning *`;
 
   if (projectPatch) {
     // The gate_tasks row above was already marked 'complete' as the first write —
