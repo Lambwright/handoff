@@ -194,17 +194,51 @@ export const PROCORE_CUSTOM_FIELDS = {
   poNumber: 562949953929326,
   currency: 562949953942386,
   pm: 562949953962855,
+  paymentTerms: 562949953933248, // CONFIRMED label "Payment Terms" via /custom_field_definitions/{id}
+  fiscalYear: 562949954054370, // CONFIRMED label "Fiscal Year", same way — also the field LEDGER's dashboard reads
 };
 
 // CONFIRMED live 2026-10-07 — read off the currency field on two real projects
 // (a CAD one and the one US project in the account). No multi-currency Procore
 // setting is in use, so this is a label only, not a value this account expects
-// to drive accounting behavior. Not wired into any gate task yet — pending a
-// decision on where payment-terms/fiscal-year live alongside it (LEDGER vs.
-// HANDOFF-set-as-project-default, Ben 2026-10-07).
+// to drive accounting behavior. LEDGER (2026-10-07): doesn't read this today,
+// no push needed — just set it in Procore.
 export const CURRENCY_OPTIONS = [
   { id: 562949954003313, name: "CAD $" },
   { id: 562949954003314, name: "USD $" },
+];
+
+// CONFIRMED live 2026-10-07 via the real options endpoint — found by web search,
+// not guessed: GET /rest/v1.0/custom_field_definitions/{id}/custom_field_lov_entries
+// (NOT in developers.procore.com's own reference nav; a Google result on
+// "List Custom Field Lov Entries" surfaced it). This is the right way to read
+// any lov_entry field's full option list — use it instead of inferring options
+// from whatever a handful of sampled projects happen to have set, which is how
+// the Fiscal Year discrepancy below was caught.
+export const PAYMENT_TERMS_OPTIONS = [
+  { id: 562949953943551, name: "Due On Receipt" },
+  { id: 562949953943065, name: "Net 15" }, // Ben's default
+  { id: 562949953943038, name: "Net 30" },
+  { id: 562949953943037, name: "Net 45" },
+  { id: 562949953943036, name: "Net 60" },
+];
+
+// CAUTION: id 562949954242559 is "2026", NOT "Current" (id 562949954242560 is
+// "Current") — confirmed against this live endpoint 2026-10-07. LEDGER's own
+// reply the same day claimed id 562949954242559 meant "Current" on every
+// project it sampled; that's the wrong id for that label. Flagged back to the
+// LEDGER session — if its dashboard is keying off that id to mean "Current",
+// its fiscal-year filter/display may be mismatching 2026 projects. No 2027
+// entry exists in this list at all — a real gap if any project needs it,
+// worth a heads-up to whoever manages this field in Procore.
+export const FISCAL_YEAR_OPTIONS = [
+  { id: 562949954242560, name: "Current" }, // Ben's default
+  { id: 562949954242558, name: "2025" },
+  { id: 562949954242559, name: "2026" },
+  { id: 562949954242561, name: "2024" },
+  { id: 562949954242562, name: "2028" },
+  { id: 562949954242563, name: "2029" },
+  { id: 562949954242564, name: "2030" },
 ];
 
 // ---------------------------------------------------------------------------
