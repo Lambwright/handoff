@@ -74,6 +74,17 @@ export async function listFiscalYearOptions({ env }) {
   return json({ options });
 }
 
+// GET /bid-stage-history — raw win-rate tracking data (admin only). No chart
+// yet, just the queryable record Ben asked for; optional ?bid_id= to scope to
+// one bid, otherwise the most recent transitions across the whole board.
+export async function listBidStageHistory({ url, sql }) {
+  const bidId = url.searchParams.get("bid_id");
+  const rows = bidId
+    ? await sql`select * from bid_stage_history where bid_id = ${bidId} order by changed_at desc`
+    : await sql`select * from bid_stage_history order by changed_at desc limit 500`;
+  return json({ history: rows });
+}
+
 export async function listUsers({ sql }) {
   const rows = await sql`
     select id, einbau_username, name, role, active, created_at

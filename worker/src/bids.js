@@ -18,6 +18,7 @@ import { procoreFetch } from "./procore.js";
 import { BID_BOARD, PROVINCE_TIMEZONE, CURRENCY_OPTIONS, PAYMENT_TERMS_OPTIONS, PROCORE_CUSTOM_FIELDS, fiscalYearOptionsPath } from "./procore-shapes.js";
 import { normalizeType, buildGateTasks } from "./checklist.js";
 import { suggestCustomerMatch } from "./matching.js";
+import { batched } from "./util.js";
 
 const BID_SCAN_MAX_PAGES = 120; // ~4,200 records at ~60-85/page ≈ 60-70 pages; headroom for growth
 // The endpoint IGNORES per_page and returns its own page size (~60-85 rows), so
@@ -55,6 +56,38 @@ async function syncRowsToCrm(env, rows) {
   } catch (e) {
     console.log("CRM sync push failed:", e.message);
   }
+}
+
+// Win-rate tracking: compare every scanned bid (not just the Awarded subset
+// bid_cache holds) against its last known status, and log a real change.
+// Skips bids seen for the first time ever — nothing to compare against, and
+// logging one would flood the table with "first scan ever" noise rather than
+// an actual stage move. One bulk SELECT + batched writes per page, not a
+// query per bid.
+async function recordStageChanges(sql, rows, runId) {
+  const ids = rows.map((b) => String(b.id));
+  if (!ids.length) return;
+  const existing = await sql`select bid_id, status, archived from bid_status_snapshot where bid_id = any(${ids})`;
+  const prevByBid = new Map(existing.map((r) => [r.bid_id, r]));
+
+  const changed = rows.filter((b) => {
+    const prev = prevByBid.get(String(b.id));
+    return !prev || prev.status !== b.status || prev.archived !== b.archived;
+  });
+
+  await batched(changed, async (b) => {
+    const bidId = String(b.id);
+    const prev = prevByBid.get(bidId);
+    await sql`
+      insert into bid_status_snapshot (bid_id, status, archived, updated_at)
+      values (${bidId}, ${b.status}, ${b.archived}, now())
+      on conflict (bid_id) do update set status = excluded.status, archived = excluded.archived, updated_at = now()`;
+    if (prev) {
+      await sql`
+        insert into bid_stage_history (bid_id, bid_name, from_status, to_status, from_archived, to_archived, run_id)
+        values (${bidId}, ${b.name || null}, ${prev.status}, ${b.status}, ${prev.archived}, ${b.archived}, ${runId})`;
+    }
+  });
 }
 
 async function upsertBidRow(sql, bid, runId) {
@@ -109,6 +142,8 @@ export async function refreshBidCache(env, sql, { maxPages = BID_SCAN_MAX_PAGES 
       complete = true;
       break;
     }
+
+    await recordStageChanges(sql, rows, runId);
 
     for (const b of rows) {
       if (BID_BOARD.isReadyToHandOff(b)) await upsertBidRow(sql, b, runId);

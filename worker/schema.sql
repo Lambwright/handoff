@@ -14,6 +14,8 @@ create extension if not exists pgcrypto;
 -- into later without a migration.
 create extension if not exists vector;
 
+drop table if exists bid_stage_history cascade;
+drop table if exists bid_status_snapshot cascade;
 drop table if exists bid_cache cascade;
 drop table if exists startup_tasks cascade;
 drop table if exists notifications cascade;
@@ -265,3 +267,33 @@ create table bid_scan_state (
   updated_at timestamptz not null default now()
 );
 insert into bid_scan_state (singleton) values (1) on conflict (singleton) do nothing;
+
+-- ---------------------------------------------------------------------------
+-- bid_status_snapshot / bid_stage_history — win-rate tracking (Ben, 2026-10-08:
+-- Procore's Bid Board has no change history of its own; "we're tracking it
+-- going forward"). Every bid the scan touches (not just the Awarded subset
+-- bid_cache holds) gets compared against its last known status here; a real
+-- change is logged to bid_stage_history. Snapshot-only on a bid's first-ever
+-- scan (nothing to compare against yet, so no history row) keeps this from
+-- flooding on the very first full pass.
+-- ---------------------------------------------------------------------------
+create table bid_status_snapshot (
+  bid_id text primary key,
+  status text,
+  archived boolean,
+  updated_at timestamptz not null default now()
+);
+
+create table bid_stage_history (
+  id uuid primary key default gen_random_uuid(),
+  bid_id text not null,
+  bid_name text,
+  from_status text,
+  to_status text not null,
+  from_archived boolean,
+  to_archived boolean not null,
+  changed_at timestamptz not null default now(),
+  run_id text
+);
+create index idx_bid_stage_history_bid on bid_stage_history (bid_id);
+create index idx_bid_stage_history_changed on bid_stage_history (changed_at);
