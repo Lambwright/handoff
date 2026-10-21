@@ -539,6 +539,18 @@ export const ESTIMATING = {
 
   summaryPath: (projectId, proposalId) => `/projects/${projectId}/estimating/proposals/${proposalId}/summary`,
 
+  // CONFIRMED live by the LEDGER session, 2026-10-21 (not HANDOFF's own probe —
+  // relayed here since it directly answers this file's own "deeper scope-draft
+  // context" TODO). /summary above is settings only (markup/waste/tax RATES,
+  // all zero on every sample seen) — THIS is where the real dollars are. Each
+  // line item carries item_cost, item_sales, labor_cost, labor_sales;
+  // Σ(item_sales+labor_sales) across all lines matches proposal.total exactly
+  // (checked against two real projects). Margin = (sales - cost) / sales.
+  // Not wired into draftScopeSummary yet — real feature work (what to show a
+  // PM, how much cost/margin detail belongs in an AI-generated brief), not a
+  // one-line add. Flagged back to Ben rather than built unprompted.
+  lineItemsPath: (projectId, proposalId) => `/projects/${projectId}/estimating/proposals/${proposalId}/line_items`,
+
   // data: the array of proposals, each e.g. {id, name, type, is_primary, total,
   // scope_of_work, inclusions, exclusions, notes, quote_nr, updated_at}.
   // type is "ESTIMATE" | "CHANGE_ORDER" — only ESTIMATE-type proposals are
