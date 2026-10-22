@@ -55,9 +55,6 @@ async function request(path, { method = "GET", body, headers, formData } = {}) {
 export const api = {
   me: () => request("/me"),
 
-  listUsers: () => request("/admin/users"),
-  upsertUser: (fields) => request("/admin/users", { method: "POST", body: fields }),
-  deactivateUser: (id) => request(`/admin/users/${id}`, { method: "DELETE" }),
   listRegions: () => request("/regions"),
   listTimezones: () => request("/timezones"),
   listCurrencyOptions: () => request("/currency-options"),

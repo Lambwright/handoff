@@ -39,33 +39,23 @@ export function isServiceCaller(request, env) {
 
 const HANDOFF_LEVELS = ["admin", "estimator", "assignment", "pm", "viewer"];
 
-// The HANDOFF-side user row for a verified Einbau ID username — only consulted
-// while HANDOFF's role-matrix Live switch is off ("access"), and for the
-// per-person PM → Procore Department mapping, which lives on the same row.
-export async function resolveActor(sql, username) {
-  if (!username) return null;
-  const rows = await sql`
-    select id, einbau_username, name, role, active
-    from users
-    where einbau_username = ${String(username).toLowerCase()}`;
-  return rows[0] || null;
-}
-
-// Role comes from auth-worker's appRoles.HANDOFF (role matrix). "access" means
-// HANDOFF isn't switched over yet, so keep the users-table role; anything else
-// (no_access, unknown) is denied. user.role / user.jobRole are never gated on.
-export async function resolveHandoffActor(sql, user) {
+// Role comes entirely from auth-worker's appRoles.HANDOFF (role matrix) — the
+// "access"/legacy-users-table fallback was the deploy-before-flip bridge;
+// HANDOFF has been Live since 2026-10-06, so it's gone. no_access or anything
+// unrecognised is denied. user.role / user.jobRole are never gated on. No DB
+// lookup — nothing in HANDOFF stores role or identity itself any more (Ben's
+// rule: no hardcoded people in app code or config, HELM manages all of it).
+export function resolveHandoffActor(user) {
   const username = String(user?.username || "").toLowerCase();
   const appRole = user?.appRoles?.HANDOFF;
-  const department = user?.fields?.department || null;
-  if (HANDOFF_LEVELS.includes(appRole)) {
-    return { einbau_username: username, name: user.displayName || username, role: appRole, active: true, source: "matrix", department };
-  }
-  if (appRole === "access") {
-    const row = await resolveActor(sql, username);
-    return row && row.active ? { ...row, source: "users", department } : null;
-  }
-  return null;
+  if (!HANDOFF_LEVELS.includes(appRole)) return null;
+  return {
+    einbau_username: username,
+    name: user.displayName || username,
+    role: appRole,
+    active: true,
+    department: user?.fields?.department || null,
+  };
 }
 
 // A PM only sees a handoff once it's assigned to them. Other roles are unaffected.
@@ -92,7 +82,7 @@ export async function requireRole(request, env, sql, roles = null) {
   const id = await verifyIdentity(request, env);
   if (!id.ok) return id;
 
-  const actor = await resolveHandoffActor(sql, id.user);
+  const actor = resolveHandoffActor(id.user);
   if (!actor) {
     return {
       ok: false,

@@ -108,11 +108,10 @@ async function loadActiveProjects(env) {
 }
 
 // Everyone who can open HANDOFF, with their Procore Department (set in HELM).
-// `isPm` is the main roster: HANDOFF level 'pm', or — while HANDOFF is not yet
-// live for them — a legacy users-table role of 'pm'. Anyone with a department who
+// `isPm` is the main roster: HANDOFF level 'pm'. Anyone with a department who
 // isn't a PM is support: assignable and filterable, but not presented as a
 // main option. Department-less PMs are kept so they can be reported.
-async function loadAssignablePeople(env, sql, request) {
+async function loadAssignablePeople(env, request) {
   const token = (request.headers.get("Authorization") || "").replace(/^Bearer /, "");
   const res = await env.AUTH_WORKER.fetch(`${env.AUTH_WORKER_URL}/auth/app/users`, {
     method: "POST",
@@ -122,19 +121,14 @@ async function loadAssignablePeople(env, sql, request) {
   if (!res.ok) throw new Error(`auth-worker /auth/app/users failed: HTTP ${res.status}`);
   const { users = [] } = await res.json();
 
-  const rows = await sql`select einbau_username, role, active from users`;
-  const legacy = new Map(rows.map((r) => [r.einbau_username, r]));
-
   return users
     .map((u) => {
-      const row = legacy.get(String(u.username).toLowerCase());
-      const isPm = u.level === "pm" || (u.level === "access" && row?.role === "pm" && row.active);
       const dept = u.department && !u.department.missing ? u.department : null;
       return {
         username: u.username,
         name: u.displayName,
         level: u.level,
-        isPm,
+        isPm: u.level === "pm",
         department_id: dept ? String(dept.id) : null,
         department_name: dept ? dept.name : null,
       };
@@ -143,15 +137,15 @@ async function loadAssignablePeople(env, sql, request) {
 }
 
 // Every person who can be assigned a handoff: anyone with a department.
-async function loadAssignableDirectory(env, sql, request) {
-  const people = await loadAssignablePeople(env, sql, request);
+async function loadAssignableDirectory(env, request) {
+  const people = await loadAssignablePeople(env, request);
   return people.filter((p) => p.department_id);
 }
 
 async function computeCandidates(env, sql, project, request) {
   const [activeProjects, people, affinityRows] = await Promise.all([
     loadActiveProjects(env),
-    loadAssignableDirectory(env, sql, request),
+    loadAssignableDirectory(env, request),
     sql`select * from pm_affinity`,
   ]);
   const pmDirectory = people.map((p) => ({ id: p.department_id, name: p.department_name || p.name }));
@@ -190,8 +184,8 @@ async function computeCandidates(env, sql, project, request) {
 // GET /pm-roster — PMs who can be assigned (mapped to a Procore Department),
 // plus any PM who still has no mapping, so an admin can see the gap. Any
 // authenticated HANDOFF user can read it.
-export async function getPmRoster({ request, env, sql }) {
-  const people = await loadAssignablePeople(env, sql, request);
+export async function getPmRoster({ request, env }) {
+  const people = await loadAssignablePeople(env, request);
   const asOption = (p) => ({ id: p.department_id, name: p.department_name || p.name });
   return json({
     roster: people.filter((p) => p.isPm && p.department_id).map(asOption),
@@ -206,7 +200,7 @@ export async function getAssignmentDepartments({ env, sql, request }) {
   const [latest, assignable] = await Promise.all([
     sql`select distinct on (project_id) project_id, assigned_pm from assignment_events
         where assigned_pm is not null order by project_id, decided_at desc`,
-    loadAssignableDirectory(env, sql, request),
+    loadAssignableDirectory(env, request),
   ]);
   const used = new Set(latest.map((r) => String(r.assigned_pm)));
   const departments = assignable
@@ -280,7 +274,7 @@ export async function confirmAssignment({ params, request, env, sql, auth }) {
   const [project] = await sql`select * from projects where id = ${params.id}`;
   if (!project) return json({ error: "not_found" }, 404);
 
-  const assignable = await loadAssignableDirectory(env, sql, request);
+  const assignable = await loadAssignableDirectory(env, request);
   const pm = assignable.find((p) => String(p.department_id) === String(body.assigned_pm));
   if (!pm) {
     return json({ error: "invalid_request", detail: "That department isn't tied to anyone who can be assigned." }, 400);

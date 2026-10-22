@@ -1,100 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api.js";
 
-const ROLES = ["estimator", "assignment", "pm", "admin"];
-
-function UsersTab() {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [form, setForm] = useState({ einbau_username: "", name: "", role: "estimator" });
-  const [saving, setSaving] = useState(false);
-
-  function load() {
-    setLoading(true);
-    api
-      .listUsers()
-      .then((data) => setUsers(data.users || []))
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }
-  useEffect(load, []);
-
-  async function save(e) {
-    e.preventDefault();
-    if (!form.einbau_username.trim() || !form.name.trim()) return;
-    setSaving(true);
-    setError(null);
-    try {
-      await api.upsertUser(form);
-      setForm({ einbau_username: "", name: "", role: "estimator" });
-      load();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function deactivate(id) {
-    await api.deactivateUser(id).catch((e) => setError(e.message));
-    load();
-  }
-
-  return (
-    <div>
-      <div className="card">
-        <div className="card-title">Add / Update a HANDOFF User</div>
-        <form onSubmit={save} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
-          <div className="field" style={{ minWidth: 160 }}>
-            <label>Einbau ID username</label>
-            <input value={form.einbau_username} onChange={(e) => setForm({ ...form, einbau_username: e.target.value })} />
-          </div>
-          <div className="field" style={{ minWidth: 160 }}>
-            <label>Display name</label>
-            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          </div>
-          <div className="field" style={{ minWidth: 140 }}>
-            <label>Role</label>
-            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-              {ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button className="btn btn-accent" disabled={saving} type="submit">
-            {saving ? "Saving…" : "Save"}
-          </button>
-        </form>
-      </div>
-
-      {error && <div className="card" style={{ color: "var(--red)" }}>{error}</div>}
-      {loading && <div className="empty-state">Loading…</div>}
-
-      <div className="row-list">
-        {users.map((u) => (
-          <div key={u.id} className="row-item" style={{ gridTemplateColumns: "1fr 1fr 100px 90px" }}>
-            <div className="row-primary">{u.name}</div>
-            <div className="row-secondary">{u.einbau_username}</div>
-            <div>
-              <span className="badge badge-pending">{u.role}</span>
-            </div>
-            {u.active ? (
-              <button className="btn btn-danger btn-sm" onClick={() => deactivate(u.id)}>
-                Deactivate
-              </button>
-            ) : (
-              <span className="row-secondary">inactive</span>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function AffinityTab() {
   const [rows, setRows] = useState([]);
   const [roster, setRoster] = useState([]);
@@ -166,7 +72,7 @@ function AffinityTab() {
                 </option>
               ))}
             </select>
-            {roster.length === 0 && <span className="field-help">No pm-role users mapped to a Department yet — see Admin → Users.</span>}
+            {roster.length === 0 && <span className="field-help">No PMs mapped to a Procore Department yet — see HELM → Departments.</span>}
           </div>
           <div className="field" style={{ width: 80 }}>
             <label>Weight</label>
@@ -200,25 +106,10 @@ function AffinityTab() {
   );
 }
 
-// The assignment team can manage the PM-affinity table but not HANDOFF user
-// roles (admin-only, backend-enforced) — the Users tab just doesn't render for
-// them rather than rendering into a 403.
-export default function Admin({ actor }) {
-  const isAdmin = actor?.role === "admin";
-  const [tab, setTab] = useState(isAdmin ? "users" : "affinity");
-  return (
-    <div>
-      <div className="tabs">
-        {isAdmin && (
-          <button className={`tab ${tab === "users" ? "active" : ""}`} onClick={() => setTab("users")}>
-            Users
-          </button>
-        )}
-        <button className={`tab ${tab === "affinity" ? "active" : ""}`} onClick={() => setTab("affinity")}>
-          PM Affinity
-        </button>
-      </div>
-      {tab === "users" && isAdmin ? <UsersTab /> : <AffinityTab />}
-    </div>
-  );
+// HANDOFF role/user management lives in HELM now (the role matrix) — this
+// page is just the PM-affinity table, which HELM has no equivalent for.
+// Reached via Header's nav, already gated to admin (or, if ever granted
+// again, assignment) there.
+export default function Admin() {
+  return <AffinityTab />;
 }

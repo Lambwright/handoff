@@ -57,22 +57,18 @@ Einbau ID is moving from each app owning its own `admin`/`user` split to a
 suite-wide model: company job roles plus a per-app matrix, edited in HELM by
 Ben only. Contract lives in `auth-worker/README.md` → "Role matrix".
 
-**Status (2026-10-05):** HANDOFF reads `user.appRoles.HANDOFF` and handles
-three cases: a real level (`admin`/`estimator`/`assignment`/`pm`/`viewer`) is
-used directly; `access` (HANDOFF not yet switched live) falls back to the
-existing `users` table role, so nothing changes until Ben flips HANDOFF's Live
-switch in HELM; `no_access` or anything else is denied. `/me` and
-`requireRole` resolve identically. Gate task edits are restricted to
-`estimator`, `pm`, and `admin` — `viewer` can read but not edit.
+**Status (live since 2026-10-06, access fallback removed 2026-10-21):**
+HANDOFF reads `user.appRoles.HANDOFF` directly — a real level
+(`admin`/`estimator`/`assignment`/`pm`/`viewer`) is used, anything else is
+denied. No `access`/legacy fallback, no local `users` table, no DB lookup at
+all for role. `/me` and `requireRole` resolve identically. Gate task edits
+are restricted to `estimator`, `pm`, and `admin` — `viewer` can read but not
+edit. Each PM's Procore Department comes from `user.fields.department`
+(HELM → Departments) via `/auth/app/users` — also no local storage.
 
-**Remaining before/after the flip:**
-- Before the flip, the PM roster is built from `/auth/app/users` (`level` =
-  `pm`, or `access` + legacy `users.role = 'pm'`). PMs are matched to Procore
-  Departments via `users.procore_department_id`, which is reused as the
-  HANDOFF-local per-person store — no new table.
-- After the flip, drop `users.role` (follow-up) and remove the `access`
-  fallback.
-- Admin → Users still edits role until then.
+Admin → Users is gone; HELM's role matrix is the only place role is set.
+HANDOFF's `users` table still exists in the database (unused, dead columns)
+— drop it in a later migration.
 
 Design notes carried from the cross-session message:
 

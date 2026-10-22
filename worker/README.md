@@ -39,17 +39,11 @@ Point `DATABASE_URL` at a Neon **branch**, not production, while iterating.
    Cloudflare and silently wipes any plain vars set on the Worker in the
    dashboard (this actually happened to `procore-worker` and cost a multi-day
    credential-recovery scramble).
-6. Give yourself the `admin` HANDOFF role once deployed and logged in — the
-   first admin has to be inserted directly:
-   ```sql
-   insert into users (einbau_username, name, role) values ('ben', 'Ben Wright', 'admin');
-   ```
-7. **Map each real PM to their Procore Department** — Admin → Users, add a
-   `pm`-role user per PM, and pick their entry from the Department dropdown
-   (`GET /departments`). This is the actual PM-candidate roster the assignment
-   engine uses; Procore's own Department list mixes departed employees and
-   non-person buckets ("Project Management", "Back Log"), so nobody is a valid
-   candidate until an admin has explicitly mapped them here.
+6. Nothing to seed. Role (`appRoles.HANDOFF`) and each PM's Procore Department
+   (`user.fields.department`) both come from HELM's role matrix — the Super
+   Admin already gets `admin` in every live app, and PMs are mapped to a
+   Department in HELM → Departments. HANDOFF holds no role or identity data
+   of its own (Ben's rule: no hardcoded people in app code or config).
 
 ## Confirmed against the live Procore account
 
