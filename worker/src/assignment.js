@@ -131,6 +131,11 @@ async function loadAssignablePeople(env, request) {
         isPm: u.level === "pm",
         department_id: dept ? String(dept.id) : null,
         department_name: dept ? dept.name : null,
+        // HELM's linked ids (auth-worker 3c69ee08) — {id, name} or null if
+        // that link isn't filled in. pm-sync.js uses these directly; never
+        // falls back to name-matching if one's missing.
+        procoreUser: u.procoreUser || null,
+        rpPerson: u.rpPerson || null,
       };
     })
     .filter((p) => p.isPm || p.department_id);
@@ -303,7 +308,9 @@ export async function confirmAssignment({ params, request, env, sql, auth }) {
     procoreProjectId: project.procore_project_id,
     projectNumber: project.project_number,
     companyId: env.PROCORE_COMPANY_ID,
-    pmName: pm.department_name || pm.name,
+    pmUsername: pm.username,
+    procoreUser: pm.procoreUser,
+    rpPerson: pm.rpPerson,
   }).catch((e) => ({ error: e.message }));
 
   const [event] = await sql`
