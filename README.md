@@ -67,8 +67,15 @@ edit. Each PM's Procore Department comes from `user.fields.department`
 (HELM → Departments) via `/auth/app/users` — also no local storage.
 
 Admin → Users is gone; HELM's role matrix is the only place role is set.
-HANDOFF's `users` table still exists in the database (unused, dead columns)
-— drop it in a later migration.
+HANDOFF's own `users` table was dropped 2026-10-22 — nothing in HANDOFF
+stores identity or role data any more.
+
+**PM sync ids (2026-10-22):** Resource Planning's person and Procore's
+Directory user are separate identity spaces from Procore Department. Both
+now come from HELM's linked ids (`user.fields.procoreUser` /
+`user.fields.rpPerson`, same `/auth/app/users` rows) instead of the
+name-token matching `pm-sync.js` used to do — a missing link skips that one
+write ("not linked in HELM") rather than falling back to matching by name.
 
 Design notes carried from the cross-session message:
 
@@ -136,9 +143,9 @@ so confirming each is a single-file change).
   `https://lambwright.github.io/handoff/`, matching SCOUT/PUNCH/TALLY's
   existing pattern. Recharts for the PM-assignment comparison view.
 - **Auth**: Einbau ID (the shared session-token system already used by
-  PUNCH/SCOUT/INTAKE/TALLY, backed by `auth-worker`). `auth-worker` only knows
-  `admin`/`user`, so HANDOFF keeps its own richer role (estimator / assignment
-  / pm / admin) in its own `users` table and resolves it per request.
+  PUNCH/SCOUT/INTAKE/TALLY, backed by `auth-worker`). HANDOFF's role
+  (estimator / assignment / pm / admin / viewer) comes from HELM's role
+  matrix (`appRoles.HANDOFF`) — resolved per request, nothing stored locally.
 - **Backend**: a single Cloudflare Worker (`handoff-worker`) — the Bid Board
   read, the gate API, the create+distribute pipeline, PM assignment, brief
   generation, startup tasks, and a 6h cron for cache refresh + staleness

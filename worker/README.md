@@ -72,12 +72,12 @@ deployed Worker's own Procore OAuth):
   (`project.custom_field_<id> = <id|string>`).
 - **PM assignment** — the project's **Department** field, `department_ids:[id]`
   on write, `project.departments: [{id, name}]` on read (e.g.
-  `[{id:562949953498534, name:"Scot Carter-Nichols"}]`, matching
-  `PROCORE_DEPARTMENTS`). **`departments` only appears on the single-project
-  GET, not the list endpoint** — `assignment.js`'s `loadActiveProjects` hydrates
-  it per-project. No live Procore endpoint for the Department option list, so
-  `PROCORE_DEPARTMENTS` stays hardcoded (same as `punch-worker`). Step 7 above:
-  the assignment roster is HANDOFF's own curated `users` table, not this raw list.
+  `[{id:562949953498534, name:"Scot Carter-Nichols"}]`. **`departments` only
+  appears on the single-project GET, not the list endpoint** —
+  `assignment.js`'s `loadActiveProjects` hydrates it per-project. The
+  Department option list itself now comes from HELM (`user.fields.department`
+  on each person's `/auth/app/users` row) — the assignment roster is whoever
+  HELM says is `pm`-level with a Department set, not a raw Procore list.
 - **`total_value`** — top-level project field, a string (`"3840.0"`); `Number()`
   handles it. `project_stage.name`, `start_date`, `completion_date` all confirmed.
 - **Address / dates** field names were already right.
@@ -130,5 +130,5 @@ Everything below is behind a `TODO(sandbox)` / `TODO(ben)` comment in
 - Every route except `/health` needs a real Einbau ID session verified against
   `auth-worker` through the `AUTH_WORKER` service binding (a plain
   worker→worker `fetch()` is blocked with Cloudflare error 1042).
-  Authorization on top of that is HANDOFF's own `users` table — `auth-worker`
-  only knows `admin`/`user`.
+  Authorization on top of that is HELM's role matrix (`appRoles.HANDOFF` on
+  the verify response) — HANDOFF stores no role or identity data itself.

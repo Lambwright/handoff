@@ -26,29 +26,12 @@ drop table if exists gate_tasks cascade;
 drop table if exists pm_affinity cascade;
 drop table if exists pm_workload_cache cascade;
 drop table if exists projects cascade;
-drop table if exists users cascade;
-
--- ---------------------------------------------------------------------------
--- users — HANDOFF-side authorization. auth-worker (Einbau ID) is the identity
--- provider and only knows admin|user, so HANDOFF owns its own richer roles and
--- ties every gate/assignment action to a real logged-in person.
--- ---------------------------------------------------------------------------
-create table users (
-  id uuid primary key default gen_random_uuid(),
-  einbau_username text not null unique,   -- matches auth-worker user.username, lowercased
-  name text not null,
-  role text not null check (role in ('estimator','assignment','pm','admin')),
-  active boolean not null default true,
-  -- For role='pm' only: which Procore Department option (see procore-shapes.js
-  -- PROCORE_DEPARTMENTS) this person is assigned as. Einbau's Department
-  -- dropdown mixes current PMs, departed employees, and non-person buckets
-  -- ("Project Management", "Back Log") -- confirmed by Ben -- so this table,
-  -- not the raw Department list, is the curated PM-candidate roster the
-  -- assignment engine actually uses.
-  procore_department_id text,
-  procore_department_name text,
-  created_at timestamptz not null default now()
-);
+-- users table removed 2026-10-22 (Ben, via the HELM/auth session) -- role,
+-- department, and every other per-person fact come from HELM's role matrix
+-- now (auth-worker's /auth/app/users). HANDOFF held no identity data of its
+-- own; this table had been empty of any real use since the role-matrix
+-- switch-over earlier this month. Confirmed via grep immediately before
+-- dropping: nothing in worker/src reads, writes, or foreign-keys to it.
 
 -- ---------------------------------------------------------------------------
 -- projects — one row per handoff. Created at 'gate' with procore_project_id NULL;
