@@ -13,21 +13,32 @@
 export async function verifyIdentity(request, env) {
   const authHeader = request.headers.get("Authorization") || "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  if (!token) return { ok: false, status: 401, reason: "No session token was sent with the request." };
+  if (!token) return { ok: false, status: 401, reason: "No session token was sent with the request.", outcome: "no_token" };
   try {
+    const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json", "X-Einbau-App": "HANDOFF" };
+    const ip = request.headers.get("CF-Connecting-IP");
+    const ua = request.headers.get("User-Agent");
+    if (ip) headers["X-Einbau-Client-IP"] = ip;
+    if (request.cf?.country) headers["X-Einbau-Client-Country"] = request.cf.country;
+    if (request.cf?.city) headers["X-Einbau-Client-City"] = request.cf.city;
+    if (request.cf?.asOrganization) headers["X-Einbau-Client-Org"] = request.cf.asOrganization;
+    if (ua) headers["X-Einbau-Client-UA"] = ua;
+
     const res = await env.AUTH_WORKER.fetch(`${env.AUTH_WORKER_URL}/auth/verify`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      headers,
       body: "{}",
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "(no body)");
-      return { ok: false, status: 401, reason: `auth-worker rejected verify (HTTP ${res.status}): ${body.slice(0, 160)}` };
+      return { ok: false, status: 401, reason: `auth-worker rejected verify (HTTP ${res.status}): ${body.slice(0, 160)}`, outcome: "bad_session" };
     }
     const data = await res.json();
-    if (!data.valid) return { ok: false, status: 401, reason: "Session is invalid or expired — please log in again." };
+    if (!data.valid) return { ok: false, status: 401, reason: "Session is invalid or expired — please log in again.", outcome: "bad_session" };
     return { ok: true, user: data.user, refreshedToken: data.refreshedToken || null };
   } catch (e) {
+    // No outcome -- this is auth-worker being unreachable (an outage), not a
+    // refused request, so it's deliberately not reported to the Security tab.
     return { ok: false, status: 502, reason: `Couldn't reach auth-worker: ${e.message}` };
   }
 }
@@ -79,6 +90,12 @@ export async function requireRole(request, env, sql, roles = null) {
   if (isServiceCaller(request, env)) {
     return { ok: true, user: { username: "service" }, actor: { einbau_username: "service", role: "admin", name: "HANDOFF service" }, refreshedToken: null };
   }
+  // A service-key header was sent but isServiceCaller above already rejected
+  // it (wrong value, or HANDOFF_SERVICE_KEY unset) — distinct from no key at
+  // all, which falls through to the normal token check below.
+  if (request.headers.get("X-Handoff-Service-Key")) {
+    return { ok: false, status: 401, reason: "Invalid service key.", outcome: "bad_service_key" };
+  }
   const id = await verifyIdentity(request, env);
   if (!id.ok) return id;
 
@@ -88,6 +105,8 @@ export async function requireRole(request, env, sql, roles = null) {
       ok: false,
       status: 403,
       reason: `"${id.user?.username}" doesn't have HANDOFF access — an admin needs to grant it.`,
+      outcome: "forbidden",
+      user: id.user,
     };
   }
   if (roles && roles.length && actor.role !== "admin" && !roles.includes(actor.role)) {
@@ -95,6 +114,8 @@ export async function requireRole(request, env, sql, roles = null) {
       ok: false,
       status: 403,
       reason: `This action needs role: ${roles.join(" or ")}. You are "${actor.role}".`,
+      outcome: "forbidden",
+      user: id.user,
     };
   }
   return { ok: true, user: id.user, actor, refreshedToken: id.refreshedToken };

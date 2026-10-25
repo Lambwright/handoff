@@ -4,6 +4,7 @@
 
 import { json, authError } from "./http.js";
 import { requireRole } from "./auth.js";
+import { reportRefusal } from "./security-report.js";
 
 function compile(pattern) {
   const names = [];
@@ -52,7 +53,18 @@ export function makeRouter() {
 
       if (route.opts.roles !== undefined) {
         const auth = await requireRole(request, env, sql, route.opts.roles);
-        if (!auth.ok) return authError(auth);
+        if (!auth.ok) {
+          executionCtx.waitUntil(
+            reportRefusal(env, {
+              request,
+              route: url.pathname,
+              outcome: auth.outcome,
+              username: auth.user?.username,
+              detail: auth.reason,
+            })
+          );
+          return authError(auth);
+        }
         ctx.auth = auth;
       }
 
