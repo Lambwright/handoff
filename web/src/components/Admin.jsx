@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api.js";
 
-function AffinityTab({ helmName }) {
+function AffinityTab({ helmName, isAdmin }) {
   const [rows, setRows] = useState([]);
   const [roster, setRoster] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -73,7 +73,11 @@ function AffinityTab({ helmName }) {
               ))}
             </select>
             {roster.length === 0 && (
-              <span className="field-help">No PMs mapped to a Procore Department yet — see {helmName || "Settings"} → Departments.</span>
+              <span className="field-help">
+                {isAdmin
+                  ? `No PMs mapped to a Procore Department yet — see ${helmName || "Settings"} → Linked ids.`
+                  : "No PMs mapped to a Procore Department yet — ask your admin to set it up."}
+              </span>
             )}
           </div>
           <div className="field" style={{ width: 80 }}>
@@ -112,6 +116,6 @@ function AffinityTab({ helmName }) {
 // page is just the PM-affinity table, which HELM has no equivalent for.
 // Reached via Header's nav, already gated to admin (or, if ever granted
 // again, assignment) there.
-export default function Admin({ helmName }) {
-  return <AffinityTab helmName={helmName} />;
+export default function Admin({ actor, helmName }) {
+  return <AffinityTab helmName={helmName} isAdmin={actor?.role === "admin"} />;
 }
