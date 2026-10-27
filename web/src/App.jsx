@@ -110,7 +110,7 @@ export default function App() {
         <div className="card-title">No HANDOFF role yet</div>
         <p>
           You're logged in as <strong>{user.displayName || user.username}</strong>, but an admin hasn't given you a HANDOFF role
-          (estimator / assignment / pm / admin) yet. Ask an admin to add you in Admin → Users.
+          (estimator / assignment / pm / admin) yet. Ask your admin to grant you one.
         </p>
       </div>
     );
