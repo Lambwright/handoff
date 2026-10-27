@@ -31,6 +31,10 @@ function mapUser(u) {
   };
 }
 
+// One bulk upsert via unnest() rather than one round-trip per row -- ~2,500
+// sequential awaited upserts was minutes-slow (and once risked running past a
+// Worker's execution budget, the same ceiling that forced bids.js's scan to be
+// incremental/resumable). A single statement scales to this row count fine.
 async function refreshCache(env, sql) {
   const users = await procoreFetchAll(env, `/companies/${env.PROCORE_COMPANY_ID}/users`, {
     version: "v1.3",
@@ -39,17 +43,26 @@ async function refreshCache(env, sql) {
   });
   const rows = users.filter((u) => u && u.id != null).map(mapUser);
 
-  for (const r of rows) {
+  if (rows.length) {
     await sql`
       insert into directory_contacts_cache
         (procore_user_id, vendor_id, vendor_name, first_name, last_name, email, phone, title, is_active, refreshed_at)
-      values
-        (${r.procore_user_id}, ${r.vendor_id}, ${r.vendor_name}, ${r.first_name}, ${r.last_name}, ${r.email}, ${r.phone}, ${r.title}, ${r.is_active}, now())
+      select * from unnest(
+        ${rows.map((r) => r.procore_user_id)}::text[],
+        ${rows.map((r) => r.vendor_id)}::text[],
+        ${rows.map((r) => r.vendor_name)}::text[],
+        ${rows.map((r) => r.first_name)}::text[],
+        ${rows.map((r) => r.last_name)}::text[],
+        ${rows.map((r) => r.email)}::text[],
+        ${rows.map((r) => r.phone)}::text[],
+        ${rows.map((r) => r.title)}::text[],
+        ${rows.map((r) => r.is_active)}::boolean[]
+      ) as t(procore_user_id, vendor_id, vendor_name, first_name, last_name, email, phone, title, is_active)
       on conflict (procore_user_id) do update set
         vendor_id = excluded.vendor_id, vendor_name = excluded.vendor_name,
         first_name = excluded.first_name, last_name = excluded.last_name,
         email = excluded.email, phone = excluded.phone, title = excluded.title,
-        is_active = excluded.is_active, refreshed_at = excluded.refreshed_at`;
+        is_active = excluded.is_active, refreshed_at = now()`;
   }
 
   await sql`
