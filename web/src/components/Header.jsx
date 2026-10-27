@@ -16,12 +16,15 @@ const CURRENT_APP = "HANDOFF";
 
 // Only apps this user can open, then HELM always last (it's where settings
 // live). No apps granted = nothing but this app and HELM (access fails
-// closed — see auth-worker/README.md).
+// closed — see auth-worker/README.md). The bottom entry's label is
+// user.helmName ("HELM" for admins/HELM-tool users, "Settings" for everyone
+// else, set by auth-worker) — the link itself never changes.
 function appLinks(user) {
   const apps = (Array.isArray(user?.apps) ? user.apps : []).map((a) => String(a).toUpperCase());
   const allowed = (name) => apps.includes(name);
   return [...APP_LINKS.filter((a) => a.name === CURRENT_APP || allowed(a.name)), HELM_LINK].map((a) => ({
     ...a,
+    label: a.name === HELM_LINK.name ? user?.helmName || "Settings" : a.name,
     current: a.name === CURRENT_APP,
   }));
 }
@@ -72,7 +75,7 @@ export default function Header({ user, actor, currentHash, onLogout, embed = fal
             <div className="app-switcher-menu">
               {appLinks(user).map((app) => (
                 <a className={`app-switcher-item${app.current ? " current" : ""}`} href={app.url} key={app.name}>
-                  {app.name}
+                  {app.label}
                 </a>
               ))}
             </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api.js";
 
-function AffinityTab() {
+function AffinityTab({ helmName }) {
   const [rows, setRows] = useState([]);
   const [roster, setRoster] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -72,7 +72,9 @@ function AffinityTab() {
                 </option>
               ))}
             </select>
-            {roster.length === 0 && <span className="field-help">No PMs mapped to a Procore Department yet — see HELM → Departments.</span>}
+            {roster.length === 0 && (
+              <span className="field-help">No PMs mapped to a Procore Department yet — see {helmName || "Settings"} → Departments.</span>
+            )}
           </div>
           <div className="field" style={{ width: 80 }}>
             <label>Weight</label>
@@ -110,6 +112,6 @@ function AffinityTab() {
 // page is just the PM-affinity table, which HELM has no equivalent for.
 // Reached via Header's nav, already gated to admin (or, if ever granted
 // again, assignment) there.
-export default function Admin() {
-  return <AffinityTab />;
+export default function Admin({ helmName }) {
+  return <AffinityTab helmName={helmName} />;
 }

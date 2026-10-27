@@ -161,7 +161,7 @@ export default function App() {
         {route.view === "gate" && <PurgatoryGate projectId={route.id} actor={actor} />}
         {route.view === "assignment" && <Assignment projectId={route.id} />}
         {route.view === "brief" && <HandoffBrief projectId={route.id} actor={actor} />}
-        {route.view === "admin" && <Admin actor={actor} />}
+        {route.view === "admin" && <Admin actor={actor} helmName={user.helmName} />}
       </div>
     </div>
   );
