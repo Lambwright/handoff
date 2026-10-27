@@ -14,6 +14,8 @@ create extension if not exists pgcrypto;
 -- into later without a migration.
 create extension if not exists vector;
 
+drop table if exists directory_contacts_scan_state cascade;
+drop table if exists directory_contacts_cache cascade;
 drop table if exists bid_stage_history cascade;
 drop table if exists bid_status_snapshot cascade;
 drop table if exists bid_cache cascade;
@@ -280,3 +282,32 @@ create table bid_stage_history (
 );
 create index idx_bid_stage_history_bid on bid_stage_history (bid_id);
 create index idx_bid_stage_history_changed on bid_stage_history (changed_at);
+
+-- ---------------------------------------------------------------------------
+-- directory_contacts_cache — the whole company Directory (v1.3 users), pulled
+-- at most once/day. CRM's GET /directory/vendor-contacts (2026-10-27) reads
+-- this filtered by vendor_id rather than hitting Procore per request — see
+-- directory.js. Caching the WHOLE directory (not per-vendor) means any
+-- vendor's contacts are at most 24h stale and a cache hit always costs 0
+-- Procore calls, with no need for a (unconfirmed) vendor-filtered query.
+-- ---------------------------------------------------------------------------
+create table directory_contacts_cache (
+  procore_user_id text primary key,
+  vendor_id text,                        -- Procore Directory company id; null for Einbau employees
+  vendor_name text,
+  first_name text,
+  last_name text,
+  email text,
+  phone text,                            -- TODO(sandbox): Procore field name guessed, unconfirmed live
+  title text,                            -- TODO(sandbox): Procore field name guessed, unconfirmed live
+  is_active boolean not null default true,
+  refreshed_at timestamptz not null default now()
+);
+create index idx_directory_contacts_vendor on directory_contacts_cache (vendor_id);
+
+create table directory_contacts_scan_state (
+  singleton integer primary key default 1 check (singleton = 1),
+  last_full_refresh_at timestamptz,
+  updated_at timestamptz not null default now()
+);
+insert into directory_contacts_scan_state (singleton) values (1) on conflict (singleton) do nothing;
