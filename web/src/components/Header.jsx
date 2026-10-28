@@ -60,6 +60,7 @@ export default function Header({ user, actor, currentHash, onLogout, embed = fal
         <div className="header-badge app-switcher" ref={ref}>
           <span
             className="header-badge-name"
+            data-einbau-logo
             style={{ cursor: embed ? "default" : "pointer" }}
             onClick={(e) => {
               if (embed) return;

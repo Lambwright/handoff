@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api.js";
+import Loading from "./Loading.jsx";
+import { busyText } from "../festive.js";
 
 function timeAgo(iso) {
   if (!iso) return "never";
@@ -129,7 +131,7 @@ export default function BidPicker({ openBidId } = {}) {
             {scanInProgress ? "scan in progress…" : `full sync ${timeAgo(refreshedAt)}`}
           </span>
           <button className="btn btn-ghost btn-sm" onClick={refresh} disabled={refreshing}>
-            {refreshing ? "Scanning Bid Board…" : "Refresh"}
+            {refreshing ? busyText("Scanning Bid Board…") : "Refresh"}
           </button>
         </div>
       </div>
@@ -139,7 +141,7 @@ export default function BidPicker({ openBidId } = {}) {
           {error}
         </div>
       )}
-      {loading && <div className="empty-state">Loading…</div>}
+      {loading && <Loading />}
       {!loading && bids.length === 0 && (
         <div className="empty-state">
           Nothing waiting — every Awarded bid has a handoff, or the cache is stale. Hit Refresh to rescan the Bid Board.
@@ -160,7 +162,7 @@ export default function BidPicker({ openBidId } = {}) {
             <div className="row-secondary">{[bid.city, bid.state_code].filter(Boolean).join(", ") || "—"}</div>
             <div className="row-amount">{bid.estimate_total != null ? `$${Math.round(bid.estimate_total).toLocaleString()}` : "—"}</div>
             <button className="btn btn-accent btn-sm" disabled={opening === bid.bid_id} onClick={() => open(bid)}>
-              {bid.handoff_project_id ? "Resume" : opening === bid.bid_id ? "Opening…" : "Start Handoff"}
+              {bid.handoff_project_id ? "Resume" : opening === bid.bid_id ? busyText("Opening…") : "Start Handoff"}
             </button>
           </div>
         ))}

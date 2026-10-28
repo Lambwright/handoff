@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api.js";
+import Loading from "./Loading.jsx";
+import { busyText } from "../festive.js";
 
 function AffinityTab({ helmName, isAdmin }) {
   const [rows, setRows] = useState([]);
@@ -89,13 +91,13 @@ function AffinityTab({ helmName, isAdmin }) {
             <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
           </div>
           <button className="btn btn-accent" disabled={saving} type="submit">
-            {saving ? "Saving…" : "Save"}
+            {saving ? busyText("Saving…") : "Save"}
           </button>
         </form>
       </div>
 
       {error && <div className="card" style={{ color: "var(--red)" }}>{error}</div>}
-      {loading && <div className="empty-state">Loading…</div>}
+      {loading && <Loading />}
 
       <div className="row-list">
         {rows.map((r) => (

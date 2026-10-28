@@ -12,6 +12,7 @@ import HandoffBrief from "./components/HandoffBrief.jsx";
 import Admin from "./components/Admin.jsx";
 import SidebarApp from "./components/SidebarApp.jsx";
 import ProjectView from "./components/ProjectView.jsx";
+import Loading from "./components/Loading.jsx";
 import { getShellContext } from "./shell.js";
 
 const SHELL = getShellContext();
@@ -89,6 +90,17 @@ export default function App() {
     setUnauthorizedHandler(handleLogout);
   }, []);
 
+  // Seasonal decorations (bats, cobwebs, snow…) once we know what to draw on.
+  useEffect(() => {
+    if (authState !== "checking") {
+      try {
+        window.EinbauFestive?.init({ app: "HANDOFF" });
+      } catch (e) {
+        // decorations are optional
+      }
+    }
+  }, [authState]);
+
   // Every shell wraps its content so the compact/full-embed CSS can scope off it.
   const shellClass = SHELL.sidebar ? "sidebar-mode" : SHELL.embed ? "embed-mode" : null;
   const wrap = (node) => (shellClass ? <div className={shellClass}>{node}</div> : node);
@@ -96,7 +108,7 @@ export default function App() {
   if (authState === "checking") {
     return wrap(
       <div className="login-screen">
-        <span className="spinner-inline">Checking session…</span>
+        <Loading text="Checking session…" size={100} />
       </div>
     );
   }

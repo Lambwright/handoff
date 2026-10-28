@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api.js";
 import PurgatoryGate from "./PurgatoryGate.jsx";
 import BidPicker from "./BidPicker.jsx";
+import Loading from "./Loading.jsx";
 
 // Compact shell for the Procore Side Panel. Assumes it's already past auth (App
 // handles login / no-role). With a bid id in the URL it opens (or resumes) that
@@ -46,7 +47,7 @@ export default function SidebarApp({ bidId, user, actor, onLogout }) {
       </div>
 
       <div className="sidebar-body">
-        {phase === "opening" && <div className="empty-state">Opening handoff…</div>}
+        {phase === "opening" && <Loading text="Opening handoff…" size={100} />}
         {phase === "error" && (
           <div className="card" style={{ color: "var(--red)" }}>
             {error}

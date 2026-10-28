@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api.js";
 import GapResolution from "./GapResolution.jsx";
+import Loading from "./Loading.jsx";
 import { useGateOptions } from "../useGateOptions.js";
 
 // The Procore project-level Full Screen tool. Given a Procore project id, shows
@@ -54,7 +55,7 @@ export default function ProjectView({ procoreProjectId, actor }) {
       });
   }, [procoreProjectId, loadSummary]);
 
-  if (status === "loading") return <div className="empty-state">Loading…</div>;
+  if (status === "loading") return <Loading />;
   if (status === "error") return <div className="card" style={{ color: "var(--red)" }}>{error}</div>;
   if (status === "none") {
     return (

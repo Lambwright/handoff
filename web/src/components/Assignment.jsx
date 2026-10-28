@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from "recharts";
 import { api } from "../api.js";
+import Loading from "./Loading.jsx";
+import { busyText } from "../festive.js";
 
 // Workload/affinity comparison + a Claude recommendation, with the assignment
 // team always able to accept or override — never a silent auto-assign (kickoff
@@ -62,7 +64,7 @@ export default function Assignment({ projectId }) {
     }
   }
 
-  if (loading) return <div className="empty-state">Loading…</div>;
+  if (loading) return <Loading />;
   if (error && !project) return <div className="card" style={{ color: "var(--red)" }}>{error}</div>;
   if (!project) return null;
 
@@ -99,7 +101,7 @@ export default function Assignment({ projectId }) {
 
       {!recommendation && (
         <button className="btn btn-accent" disabled={recommending || candidates.length === 0} onClick={getRecommendation} style={{ marginBottom: 16 }}>
-          {recommending ? "Thinking…" : "Get Recommendation"}
+          {recommending ? busyText("Thinking…") : "Get Recommendation"}
         </button>
       )}
       {recommendation && (
@@ -162,7 +164,7 @@ export default function Assignment({ projectId }) {
       )}
 
       <button className="btn btn-accent" disabled={!selected || confirming} onClick={confirm} style={{ marginTop: 12 }}>
-        {confirming ? "Confirming…" : selected ? `Assign to ${candidates.find((c) => c.pm_id === selected)?.pm_name || selected}` : "Pick a PM"}
+        {confirming ? busyText("Confirming…") : selected ? `Assign to ${candidates.find((c) => c.pm_id === selected)?.pm_name || selected}` : "Pick a PM"}
       </button>
     </div>
   );

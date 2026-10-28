@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api.js";
 import GapResolution from "./GapResolution.jsx";
+import Loading from "./Loading.jsx";
+import { busyText } from "../festive.js";
 import { getShellContext } from "../shell.js";
 import { useGateOptions } from "../useGateOptions.js";
 
@@ -67,7 +69,7 @@ export default function PurgatoryGate({ projectId, actor }) {
     }
   }
 
-  if (loading) return <div className="empty-state">Loading…</div>;
+  if (loading) return <Loading />;
   if (error && !project) return <div className="card" style={{ color: "var(--red)" }}>{error}</div>;
   if (!project) return null;
 
@@ -157,7 +159,7 @@ export default function PurgatoryGate({ projectId, actor }) {
           {actor?.role !== "viewer" && (
             <div style={{ marginTop: 16 }}>
               <button className="btn btn-accent" disabled={!ready || submitting} onClick={submit}>
-                {submitting ? "Creating project…" : "Submit — Create Project"}
+                {submitting ? busyText("Creating project…") : "Submit — Create Project"}
               </button>
             </div>
           )}

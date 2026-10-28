@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api.js";
+import { busyText } from "../festive.js";
 
 // ONE generic item component, reused on both sides of the process (kickoff
 // doc): the estimator uses it to fill/defer every Purgatory gate task, and the
@@ -268,7 +269,7 @@ export default function GapResolution({
           />
           <div className="checklist-item-actions">
             <button className="btn btn-ghost btn-sm" disabled={drafting || busy || !project?.procore_project_id} onClick={aiDraft}>
-              {drafting ? "Drafting…" : "Draft with AI"}
+              {drafting ? busyText("Drafting…") : "Draft with AI"}
             </button>
             <button className="btn btn-accent btn-sm" disabled={busy} onClick={() => complete(draft ?? task.value ?? "")}>
               Save

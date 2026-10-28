@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api.js";
 import GapResolution from "./GapResolution.jsx";
+import Loading from "./Loading.jsx";
 import { useGateOptions } from "../useGateOptions.js";
 
 const SECTIONS = [
@@ -40,7 +41,7 @@ export default function HandoffBrief({ projectId, actor }) {
     load();
   }, [load]);
 
-  if (loading) return <div className="empty-state">Loading…</div>;
+  if (loading) return <Loading />;
   if (error) return <div className="card" style={{ color: "var(--red)" }}>{error}</div>;
   if (!brief) return <div className="empty-state">No brief generated yet — this handoff hasn't had a PM confirmed.</div>;
 

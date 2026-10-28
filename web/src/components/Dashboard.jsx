@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api.js";
+import Loading from "./Loading.jsx";
 
 const STATUSES = [
   { key: "", label: "All" },
@@ -83,7 +84,7 @@ export default function Dashboard({ actor }) {
           {error}
         </div>
       )}
-      {loading && <div className="empty-state">Loading…</div>}
+      {loading && <Loading />}
       {!loading && projects.length === 0 && <div className="empty-state">No handoffs here yet.</div>}
 
       <div className="row-list">
