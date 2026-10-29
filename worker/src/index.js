@@ -29,6 +29,8 @@
 //   POST /pm-affinity                (assignment, admin) upsert a row
 //   GET  /directory/vendor-contacts  (any role, or CRM via service key) Procore
 //        Directory contacts for one vendor, cached up to 24h
+//   GET  /directory/vendor-search    (any role, or CRM via service key) ranked
+//        Procore Directory company matches for a name, cached up to 24h
 //
 // Secrets: DATABASE_URL, ANTHROPIC_API_KEY, HANDOFF_SERVICE_KEY,
 //          PROCORE_CLIENT_ID, PROCORE_CLIENT_SECRET
@@ -58,7 +60,7 @@ import { getBrief } from "./brief.js";
 import { listAffinity, upsertAffinity } from "./affinity.js";
 import { listNotifications } from "./notify.js";
 import { listProjects, getProjectByProcore, getProjectSummary } from "./projects.js";
-import { getVendorContacts } from "./directory.js";
+import { getVendorContacts, searchVendors } from "./directory.js";
 import { runCronTick } from "./cron.js";
 
 const router = makeRouter();
@@ -73,6 +75,7 @@ router.get("/currency-options", { roles: [] }, listCurrencyOptions);
 router.get("/payment-terms-options", { roles: [] }, listPaymentTermsOptions);
 router.get("/bid-stage-history", { roles: ["admin"] }, listBidStageHistory);
 router.get("/directory/vendor-contacts", { roles: [] }, getVendorContacts);
+router.get("/directory/vendor-search", { roles: [] }, searchVendors);
 router.post("/admin/procore-probe", { roles: ["admin"] }, procoreProbe); // TEMPORARY — remove after procore-shapes.js is confirmed
 
 router.get("/bids", { roles: ["estimator", "assignment"] }, listAwardedBids);

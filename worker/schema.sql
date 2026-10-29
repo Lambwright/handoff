@@ -16,6 +16,7 @@ create extension if not exists vector;
 
 drop table if exists directory_contacts_scan_state cascade;
 drop table if exists directory_contacts_cache cascade;
+drop table if exists directory_vendors_cache cascade;
 drop table if exists bid_stage_history cascade;
 drop table if exists bid_status_snapshot cascade;
 drop table if exists bid_cache cascade;
@@ -308,6 +309,18 @@ create index idx_directory_contacts_vendor on directory_contacts_cache (vendor_i
 create table directory_contacts_scan_state (
   singleton integer primary key default 1 check (singleton = 1),
   last_full_refresh_at timestamptz,
+  last_vendor_refresh_at timestamptz,
   updated_at timestamptz not null default now()
 );
 insert into directory_contacts_scan_state (singleton) values (1) on conflict (singleton) do nothing;
+
+-- directory_vendors_cache — every Directory company (name + active flag only,
+-- no contacts), pulled at most once/day. CRM's GET /directory/vendor-search
+-- (2026-10-29) ranks this cache with matching.js's rankMatches rather than
+-- calling Procore per keystroke — see directory.js's searchVendors.
+create table directory_vendors_cache (
+  directory_id text primary key,
+  name text not null,
+  is_active boolean not null default true,
+  refreshed_at timestamptz not null default now()
+);

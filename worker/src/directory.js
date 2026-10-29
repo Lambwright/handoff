@@ -6,6 +6,8 @@
 
 import { json } from "./http.js";
 import { procoreFetchAll } from "./procore.js";
+import { DIRECTORY } from "./procore-shapes.js";
+import { rankMatches } from "./matching.js";
 
 const REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
@@ -69,6 +71,64 @@ async function refreshCache(env, sql) {
     update directory_contacts_scan_state
     set last_full_refresh_at = now(), updated_at = now()
     where singleton = 1`;
+}
+
+// GET /directory/vendor-search?q= — CRM's "Find in Procore" linker for a
+// company with no Procore vendor id yet (2026-10-29, Ben approved via CRM).
+// Same cache-at-most-daily shape as the contacts cache above, same scoring as
+// matching.js's customer-search (rankMatches over the whole Directory).
+async function refreshVendorsCache(env, sql) {
+  const vendors = await procoreFetchAll(env, DIRECTORY.listVendorsPath(env.PROCORE_COMPANY_ID), {
+    version: DIRECTORY.version,
+    perPage: 1000,
+    maxPages: 10,
+  });
+  const rows = vendors
+    .filter((v) => v && v.id != null && (v.name || v.company || v.companyname))
+    .map((v) => ({
+      directory_id: String(v.id),
+      name: v.name || v.company || v.companyname,
+      is_active: v.is_active !== false,
+    }));
+
+  if (rows.length) {
+    await sql`
+      insert into directory_vendors_cache (directory_id, name, is_active, refreshed_at)
+      select * from unnest(
+        ${rows.map((r) => r.directory_id)}::text[],
+        ${rows.map((r) => r.name)}::text[],
+        ${rows.map((r) => r.is_active)}::boolean[]
+      ) as t(directory_id, name, is_active)
+      on conflict (directory_id) do update set
+        name = excluded.name, is_active = excluded.is_active, refreshed_at = now()`;
+  }
+
+  await sql`
+    update directory_contacts_scan_state
+    set last_vendor_refresh_at = now(), updated_at = now()
+    where singleton = 1`;
+}
+
+export async function searchVendors({ env, sql, url }) {
+  const q = (url.searchParams.get("q") || "").trim();
+  if (q.length < 2) return json({ candidates: [] });
+
+  const [state] = await sql`select last_vendor_refresh_at from directory_contacts_scan_state where singleton = 1`;
+  const stale = !state?.last_vendor_refresh_at || Date.now() - new Date(state.last_vendor_refresh_at).getTime() >= REFRESH_INTERVAL_MS;
+
+  if (stale) {
+    try {
+      await refreshVendorsCache(env, sql);
+    } catch (e) {
+      return json({ error: "procore_unavailable", detail: e.message }, 502);
+    }
+  }
+
+  const vendors = await sql`select directory_id as id, name, is_active from directory_vendors_cache`;
+  const candidates = rankMatches(q, vendors)
+    .filter((m) => m.is_active && m.score > 0)
+    .slice(0, 10);
+  return json({ candidates });
 }
 
 export async function getVendorContacts({ env, sql, url }) {
