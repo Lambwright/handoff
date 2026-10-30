@@ -208,7 +208,7 @@ export async function draftScopeSummary({ params, env, sql, auth }) {
   let proposal = null;
   let summary = null;
   if (project.procore_project_id) {
-    const { ok, data } = await procoreFetch(env, ESTIMATING.proposalsPath(project.procore_project_id), { version: ESTIMATING.version });
+    const { ok, data } = await procoreFetch(env, ESTIMATING.proposalsPath(env.PROCORE_COMPANY_ID, project.procore_project_id), { version: ESTIMATING.version });
     if (ok) {
       const primary = ESTIMATING.findPrimaryProposal(data);
       if (primary) {
@@ -222,7 +222,7 @@ export async function draftScopeSummary({ params, env, sql, auth }) {
           exclusions: primary.exclusions || [],
           notes: primary.notes ? stripHtml(primary.notes) : null,
         };
-        const summaryRes = await procoreFetch(env, ESTIMATING.summaryPath(project.procore_project_id, primary.id), { version: ESTIMATING.version });
+        const summaryRes = await procoreFetch(env, ESTIMATING.summaryPath(env.PROCORE_COMPANY_ID, project.procore_project_id, primary.id), { version: ESTIMATING.version });
         if (summaryRes.ok) summary = ESTIMATING.parseSummary(summaryRes.data);
       }
     }

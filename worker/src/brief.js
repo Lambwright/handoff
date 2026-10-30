@@ -12,11 +12,20 @@ import { writeNotification } from "./notify.js";
 import { pmMayAccess } from "./auth.js";
 
 async function loadEstimateSummary(env, project) {
+  if (!project.procore_project_id) return null;
   try {
-    const { ok, data } = await procoreFetch(env, ESTIMATING.summaryPath(project.procore_project_id), {
+    // /summary is keyed off a proposal id (never just the project) -- resolve
+    // the primary proposal first, same as gate.js's draftScopeSummary context.
+    const { ok, data } = await procoreFetch(env, ESTIMATING.proposalsPath(env.PROCORE_COMPANY_ID, project.procore_project_id), {
       version: ESTIMATING.version,
     });
-    return ok ? ESTIMATING.parseSummary(data) : null;
+    if (!ok) return null;
+    const primary = ESTIMATING.findPrimaryProposal(data);
+    if (!primary) return null;
+    const summaryRes = await procoreFetch(env, ESTIMATING.summaryPath(env.PROCORE_COMPANY_ID, project.procore_project_id, primary.id), {
+      version: ESTIMATING.version,
+    });
+    return summaryRes.ok ? ESTIMATING.parseSummary(summaryRes.data) : null;
   } catch {
     return null;
   }

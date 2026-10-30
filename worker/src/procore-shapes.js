@@ -532,12 +532,25 @@ export const EMAIL_TOOL = {
 // existing project instead). Both proposals and summary shapes below are the
 // real response, not the reference-page guess.
 // ---------------------------------------------------------------------------
+// CORRECTED 2026-10-30: every path below is company-scoped
+// (`/companies/{companyId}/projects/{projectId}/estimating/...`) — the bare
+// `/projects/{id}/estimating/...` form every path used to build 404s. Caught
+// chasing Ben's labour-budget question (below) and confirmed against a real
+// project (KPS Costco #1790, project 562949955397029) AND via the LEDGER
+// session's own working client, which had the company prefix right from the
+// start. This was a live bug: gate.js's draftScopeSummary context-fetch and
+// brief.js's loadEstimateSummary had BOTH been silently 404ing since they were
+// written — brief.js additionally called summaryPath with projectId alone,
+// never passing a proposalId at all. Both call sites now resolve companyId +
+// the primary proposal id first, same as gate.js already did for the proposal
+// itself.
 export const ESTIMATING = {
   version: "v2.0",
 
-  proposalsPath: (projectId) => `/projects/${projectId}/estimating/proposals`,
+  proposalsPath: (companyId, projectId) => `/companies/${companyId}/projects/${projectId}/estimating/proposals`,
 
-  summaryPath: (projectId, proposalId) => `/projects/${projectId}/estimating/proposals/${proposalId}/summary`,
+  summaryPath: (companyId, projectId, proposalId) =>
+    `/companies/${companyId}/projects/${projectId}/estimating/proposals/${proposalId}/summary`,
 
   // CONFIRMED live by the LEDGER session, 2026-10-21 (not HANDOFF's own probe —
   // relayed here since it directly answers this file's own "deeper scope-draft
@@ -549,7 +562,35 @@ export const ESTIMATING = {
   // Not wired into draftScopeSummary yet — real feature work (what to show a
   // PM, how much cost/margin detail belongs in an AI-generated brief), not a
   // one-line add. Flagged back to Ben rather than built unprompted.
-  lineItemsPath: (projectId, proposalId) => `/projects/${projectId}/estimating/proposals/${proposalId}/line_items`,
+  //
+  // FULL shape CONFIRMED 2026-10-30 (chasing Ben's labour-budget question —
+  // see directory.js's sibling labour-budget work): {id, type ("COUNT"...),
+  // takeoff_quantity, quantity, item_cost, item_sales, labor_cost, labor_sales,
+  // profit, name, group_id, labor_factor, tag, cost_item:{id, type ("LABOR"...),
+  // name, unit, unit_labor, unit_labor_rate, unit_cost, color, catalog_id, ...}}.
+  // Two things this settles:
+  //   1. NO cost_code / cost_code_name field anywhere on the line OR cost_item.
+  //      Procore's Estimating tool doesn't carry CSI-style cost codes at all —
+  //      that's a dead end, not a field-name guess to keep hunting for. (The
+  //      "Budget Code" column on a Bid-Board-stage Excel estimate export is a
+  //      DIFFERENT, Bid-Board-only artifact — not reachable from this API.)
+  //   2. `quantity` (NOT `takeoff_quantity`, which was 0 on every line seen) IS
+  //      the exact total labor hours for a LABOR-type line whose cost_item.unit
+  //      is "HOURS" — confirmed exactly, not derived: quantity *
+  //      cost_item.unit_labor_rate === labor_cost on every line checked.
+  lineItemsPath: (companyId, projectId, proposalId) =>
+    `/companies/${companyId}/projects/${projectId}/estimating/proposals/${proposalId}/line_items`,
+
+  // CONFIRMED live 2026-10-30 — a bare GET, no further sub-id. -> {data:
+  // [{id, name, item_cost, item_sales, labor_cost, labor_sales, profit,
+  // multiplier, pricing_override, notes, updated_at}]}. Resolves each line
+  // item's group_id to a human name. On the one project checked, every line
+  // shared a single "Default Group" — the real area/fixture-level breakdown
+  // that a labour budget wants lives on each LINE's own `name` (e.g. "Bakery
+  // Freezer", "Bakery Cooler"), not the group. Don't assume groups are always
+  // meaningfully split; check per-project.
+  lineItemGroupsPath: (companyId, projectId, proposalId) =>
+    `/companies/${companyId}/projects/${projectId}/estimating/proposals/${proposalId}/line_item_groups`,
 
   // data: the array of proposals, each e.g. {id, name, type, is_primary, total,
   // scope_of_work, inclusions, exclusions, notes, quote_nr, updated_at}.
