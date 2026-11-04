@@ -12,6 +12,19 @@
 //     the dependent feature is trusted.
 // ===========================================================================
 
+// Procore's Create/Patch Project rejects anything but a real ISO-3166 alpha-2
+// country code, and additionally rejects state_code whenever country_code is
+// missing/invalid ("cannot be set without a country") -- so a bid's raw
+// Procore address.country holding free text like "Canada" instead of "CA"
+// 422s the whole create, cascading to reject state_code too even though state
+// was fine. CONFIRMED live 2026-11-04 (Ben: "ON - Pharmed Construction Ltd.
+// - Aevum PETG Pod & Door Install" failed create on exactly this). Einbau
+// only operates in Canada and the US -- clamp to one of those two rather than
+// passing an unvalidated value through.
+function normalizeCountryCode(raw) {
+  return String(raw || "").trim().toUpperCase() === "US" ? "US" : "CA";
+}
+
 // ---------------------------------------------------------------------------
 // Bid Board
 // ---------------------------------------------------------------------------
@@ -105,7 +118,7 @@ export const BID_BOARD = {
         city: bid.address?.city || null,
         state_code: bid.address?.state || null, // bid uses `state`, project uses `state_code`
         postal_code: bid.address?.zip || null,
-        country_code: bid.address?.country || "CA",
+        country_code: normalizeCountryCode(bid.address?.country),
       },
       estimate_total: bid.stats?.total ?? null,
       estimator_user_id: bid.estimator_user_id ? String(bid.estimator_user_id) : null,
@@ -325,11 +338,17 @@ export const PROJECT = {
     if (address?.city) project.city = address.city;
     if (address?.state_code) project.state_code = address.state_code;
     if (address?.postal_code) project.zip = address.postal_code;
-    if (address?.country_code) project.country_code = address.country_code;
+    // Always send a valid country_code alongside any other address field --
+    // Procore rejects state_code outright when country_code is missing/bad.
+    if (address?.street || address?.city || address?.state_code || address?.postal_code || address?.country_code) {
+      project.country_code = normalizeCountryCode(address?.country_code);
+    }
     return { company_id: companyId, project };
   },
 
   // CONFIRMED live (punch-worker's buildProcoreWriteback "address" case).
+  // country_code normalized for the same reason as buildCreatePayload above --
+  // Procore rejects state_code without a valid country_code alongside it.
   buildAddressPatch({ companyId, address }) {
     return {
       company_id: companyId,
@@ -338,7 +357,9 @@ export const PROJECT = {
         city: address.city || undefined,
         state_code: address.state_code || undefined,
         zip: address.postal_code || undefined,
-        country_code: address.country_code || undefined,
+        country_code: address.street || address.city || address.state_code || address.postal_code || address.country_code
+          ? normalizeCountryCode(address.country_code)
+          : undefined,
       },
     };
   },
