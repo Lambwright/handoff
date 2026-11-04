@@ -12,17 +12,20 @@ import { writeNotification } from "./notify.js";
 import { pmMayAccess } from "./auth.js";
 
 async function loadEstimateSummary(env, project) {
-  if (!project.procore_project_id) return null;
+  if (!project.source_bid_id) return null;
   try {
-    // /summary is keyed off a proposal id (never just the project) -- resolve
-    // the primary proposal first, same as gate.js's draftScopeSummary context.
-    const { ok, data } = await procoreFetch(env, ESTIMATING.proposalsPath(env.PROCORE_COMPANY_ID, project.procore_project_id), {
+    // Bid-scoped, not project-scoped (Ben, 2026-11-04): the real won estimate
+    // never carries onto the project create.js creates -- see
+    // procore-shapes.js's ESTIMATING comment. /summary is keyed off a
+    // proposal id (never just the bid) -- resolve the primary proposal first,
+    // same as gate.js's draftScopeSummary context.
+    const { ok, data } = await procoreFetch(env, ESTIMATING.bidProposalsPath(env.PROCORE_COMPANY_ID, project.source_bid_id), {
       version: ESTIMATING.version,
     });
     if (!ok) return null;
     const primary = ESTIMATING.findPrimaryProposal(data);
     if (!primary) return null;
-    const summaryRes = await procoreFetch(env, ESTIMATING.summaryPath(env.PROCORE_COMPANY_ID, project.procore_project_id, primary.id), {
+    const summaryRes = await procoreFetch(env, ESTIMATING.bidSummaryPath(env.PROCORE_COMPANY_ID, project.source_bid_id, primary.id), {
       version: ESTIMATING.version,
     });
     return summaryRes.ok ? ESTIMATING.parseSummary(summaryRes.data) : null;

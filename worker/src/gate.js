@@ -208,8 +208,12 @@ export async function draftScopeSummary({ params, env, sql, auth }) {
   let proposal = null;
   let summary = null;
   let estimateTotals = null;
-  if (project.procore_project_id) {
-    const { ok, data } = await procoreFetch(env, ESTIMATING.proposalsPath(env.PROCORE_COMPANY_ID, project.procore_project_id), { version: ESTIMATING.version });
+  // Bid-scoped, not project-scoped (Ben, 2026-11-04): the real won estimate
+  // lives on the Bid Board record for good -- it's never carried onto the
+  // project create.js creates (see procore-shapes.js's ESTIMATING comment).
+  // Works pre-creation too, since nothing here needs a Procore project yet.
+  if (bid.id) {
+    const { ok, data } = await procoreFetch(env, ESTIMATING.bidProposalsPath(env.PROCORE_COMPANY_ID, bid.id), { version: ESTIMATING.version });
     if (ok) {
       const primary = ESTIMATING.findPrimaryProposal(data);
       if (primary) {
@@ -223,13 +227,13 @@ export async function draftScopeSummary({ params, env, sql, auth }) {
           exclusions: primary.exclusions || [],
           notes: primary.notes ? stripHtml(primary.notes) : null,
         };
-        const summaryRes = await procoreFetch(env, ESTIMATING.summaryPath(env.PROCORE_COMPANY_ID, project.procore_project_id, primary.id), { version: ESTIMATING.version });
+        const summaryRes = await procoreFetch(env, ESTIMATING.bidSummaryPath(env.PROCORE_COMPANY_ID, bid.id, primary.id), { version: ESTIMATING.version });
         if (summaryRes.ok) summary = ESTIMATING.parseSummary(summaryRes.data);
 
         // Ben (2026-11-04): the draft should actually read the estimate's
         // hours and margin, not just the proposal's rate settings above.
         try {
-          const items = await procoreFetchAll(env, ESTIMATING.lineItemsPath(env.PROCORE_COMPANY_ID, project.procore_project_id, primary.id), {
+          const items = await procoreFetchAll(env, ESTIMATING.bidLineItemsPath(env.PROCORE_COMPANY_ID, bid.id, primary.id), {
             version: ESTIMATING.version,
             perPage: 100,
             maxPages: 20,

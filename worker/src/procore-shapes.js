@@ -568,6 +568,30 @@ export const EMAIL_TOOL = {
 export const ESTIMATING = {
   version: "v2.0",
 
+  // CONFIRMED live 2026-11-04 (Ben caught a real project's estimate_totals
+  // reading all zero -- "the estimate isn't on this project"): the real won
+  // estimate lives on the Bid Board record for its whole life and is NEVER
+  // carried onto the project create.js creates. That create is a plain
+  // POST /projects (see PROJECT.createPath below) -- NOT Procore's own "Push
+  // to Portfolio" action, which has no public API equivalent (confirmed by
+  // research 2026-11-04: bid_board_projects.project_id is read-only, set only
+  // by that UI-only action). The project HANDOFF creates gets its OWN blank
+  // "Original Estimate" proposal stub instead, seeded by PROJECT_TEMPLATE_ID
+  // -- same name, total: 0, zero line items, easy to mistake for the real one
+  // (that's exactly what tripped this up). The fix is bidProposalsPath /
+  // bidSummaryPath / bidLineItemsPath below, scoped to source_bid_id -- the
+  // ACTUAL estimate, reachable from the moment the bid is Awarded (even
+  // pre-creation, no project needed at all). gate.js / brief.js use these.
+  bidProposalsPath: (companyId, bidId) => `/companies/${companyId}/estimating/bid_board_projects/${bidId}/proposals`,
+  bidSummaryPath: (companyId, bidId, proposalId) =>
+    `/companies/${companyId}/estimating/bid_board_projects/${bidId}/proposals/${proposalId}/summary`,
+  bidLineItemsPath: (companyId, bidId, proposalId) =>
+    `/companies/${companyId}/estimating/bid_board_projects/${bidId}/proposals/${proposalId}/line_items`,
+
+  // Project-scoped variants -- kept for whatever gets added directly on the
+  // real project post-creation (e.g. a CHANGE_ORDER-type proposal logged
+  // against the live project, not the original bid). NOT where the original
+  // won estimate lives -- see the bid-scoped paths above for that.
   proposalsPath: (companyId, projectId) => `/companies/${companyId}/projects/${projectId}/estimating/proposals`,
 
   summaryPath: (companyId, projectId, proposalId) =>
