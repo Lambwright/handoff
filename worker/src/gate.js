@@ -270,11 +270,13 @@ export async function draftScopeSummary({ params, env, sql, auth }) {
   let draft = "";
   try {
     draft = await callClaude(env, {
-      // Was 700 -- too tight for the "4-8 sentences" the prompt asks for once
-      // estimate_totals/tender_emails give it enough to say; Ben caught a real
-      // draft getting cut off mid-sentence (2026-11-04). Giving real headroom
-      // above the target length instead of a hard wall right at it.
-      maxTokens: 1500,
+      // Was 700, then 1500 -- both still cut a real draft off mid-sentence
+      // (Ben, 2026-11-04 x2). This draft routinely runs well past the "4-8
+      // sentences" the prompt asks for once there's real proposal/email detail
+      // to ground it in (named contacts, phased dates, flagged conflicts) --
+      // the model isn't obeying the length ask, so give it enough room that the
+      // ceiling itself is never what ends the draft.
+      maxTokens: 3000,
       system:
         "You draft a short 'scope of work' summary for an Einbau Services millwork-installation project handoff, for the incoming PM. " +
         "If a primary estimating proposal is given, its scope_of_work/inclusions/exclusions are the estimator's own words — " +
