@@ -167,6 +167,18 @@ export function isPostCreation(taskType) {
   return Boolean(CHECKLIST_REGISTRY.find((i) => i.key === taskType)?.post_creation);
 }
 
+// Mirrors gateIsComplete's pre-creation check (gate.js), but for the
+// post_creation items (tender_correspondence, scope_summary, estimates_reviewed):
+// required if the project's type calls for them. Ben (2026-11-04): these
+// shouldn't block the Procore project from existing, but they SHOULD block
+// moving on to PM Assignment -- resolved or honestly deferred with a reason,
+// same standard as the pre-creation items, no free pass.
+export function postCreationIsComplete(tasks) {
+  const blocking = tasks.filter((t) => t.required && isPostCreation(t.task_type));
+  const unresolved = blocking.filter((t) => !["complete", "deferred"].includes(t.status));
+  return { ready: unresolved.length === 0, unresolved };
+}
+
 // The gate-task rows to seed for a given project type. Unknown / null type ->
 // treat as Contract (the strictest reasonable default) so nothing is skipped.
 export function buildGateTasks(projectType) {

@@ -14,6 +14,7 @@ import { batched } from "./util.js";
 import { generateBrief } from "./brief.js";
 import { runStartupTasks } from "./startup.js";
 import { syncProjectManager } from "./pm-sync.js";
+import { postCreationIsComplete } from "./checklist.js";
 
 // ---------------------------------------------------------------------------
 // Pure logic (unit-tested without Procore/DB) — util.js's daysOverlap-style
@@ -278,6 +279,19 @@ export async function confirmAssignment({ params, request, env, sql, auth }) {
 
   const [project] = await sql`select * from projects where id = ${params.id}`;
   if (!project) return json({ error: "not_found" }, 404);
+
+  const postCreationTasks = await sql`select * from gate_tasks where project_id = ${project.id}`;
+  const { ready, unresolved } = postCreationIsComplete(postCreationTasks);
+  if (!ready) {
+    return json(
+      {
+        error: "post_creation_incomplete",
+        detail: "Every post-creation item needs a value or a deferral reason before this handoff can move to PM assignment.",
+        unresolved: unresolved.map((t) => ({ id: t.id, task_type: t.task_type, label: t.label })),
+      },
+      409
+    );
+  }
 
   const assignable = await loadAssignableDirectory(env, request);
   const pm = assignable.find((p) => String(p.department_id) === String(body.assigned_pm));

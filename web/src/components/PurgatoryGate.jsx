@@ -81,6 +81,11 @@ export default function PurgatoryGate({ projectId, actor }) {
   const postTasks = tasks.filter(
     (t) => POST_CREATION.has(t.task_type) || ["deferred", "verify_failed"].includes(t.status)
   );
+  // Ben (2026-11-04): don't hand out a free pass past these — resolved or
+  // honestly deferred with a reason, same standard as the pre-creation items.
+  // Mirrors checklist.js's postCreationIsComplete, which the server enforces too.
+  const postCreationBlocking = tasks.filter((t) => t.required && POST_CREATION.has(t.task_type));
+  const pmAssignReady = postCreationBlocking.every((t) => ["complete", "deferred"].includes(t.status));
 
   return (
     <div>
@@ -100,9 +105,20 @@ export default function PurgatoryGate({ projectId, actor }) {
           This handoff has already been submitted — Procore project #{project.procore_project_id || "?"} was created.
           {project.status === "assigning" && (
             <div style={{ marginTop: 10 }}>
-              <a className="btn btn-accent btn-sm" {...stageLink(`#/project/${project.id}/assignment`)}>
-                Go to PM Assignment{IN_SIDEBAR ? " ↗" : ""}
-              </a>
+              {pmAssignReady ? (
+                <a className="btn btn-accent btn-sm" {...stageLink(`#/project/${project.id}/assignment`)}>
+                  Go to PM Assignment{IN_SIDEBAR ? " ↗" : ""}
+                </a>
+              ) : (
+                <>
+                  <button className="btn btn-accent btn-sm" disabled>
+                    Go to PM Assignment
+                  </button>
+                  <div className="field-help" style={{ marginTop: 6 }}>
+                    Resolve (or defer with a reason) everything below first.
+                  </div>
+                </>
+              )}
             </div>
           )}
           {["assigned", "complete"].includes(project.status) && (
