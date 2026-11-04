@@ -99,9 +99,14 @@ export async function procoreFetchAll(env, path, { version = "v1.0", query = {},
       query: { ...query, page, per_page: perPage },
     });
     if (!ok) throw new Error(`Procore paginated GET ${path} failed on page ${page}: HTTP ${status}`);
-    if (!Array.isArray(data) || data.length === 0) break;
-    all.push(...data);
-    if (data.length < perPage) break;
+    // v1.0/v1.3 list endpoints return a bare array; v2.0 ones (Estimating,
+    // Bid Board) wrap it as {data: [...]} -- caught 2026-11-04 adding the
+    // first v2.0 caller here (gate.js's estimate-totals aggregation), which
+    // was silently getting an empty array back every time without this.
+    const rows = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : null;
+    if (!rows || rows.length === 0) break;
+    all.push(...rows);
+    if (rows.length < perPage) break;
   }
   return all;
 }

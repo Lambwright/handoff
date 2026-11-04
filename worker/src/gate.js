@@ -6,7 +6,7 @@ import { json } from "./http.js";
 import { runCreatePipeline, verifyBackedTask, pushOneDocument, FIELD_PUSHERS } from "./create.js";
 import { isPostCreation } from "./checklist.js";
 import { callClaude } from "./claude.js";
-import { procoreFetch } from "./procore.js";
+import { procoreFetch, procoreFetchAll } from "./procore.js";
 import { pmMayAccess } from "./auth.js";
 import { EMAIL_TOOL, BID_BOARD, ESTIMATING } from "./procore-shapes.js";
 import { stripHtml } from "./util.js";
@@ -207,6 +207,7 @@ export async function draftScopeSummary({ params, env, sql, auth }) {
 
   let proposal = null;
   let summary = null;
+  let estimateTotals = null;
   if (project.procore_project_id) {
     const { ok, data } = await procoreFetch(env, ESTIMATING.proposalsPath(env.PROCORE_COMPANY_ID, project.procore_project_id), { version: ESTIMATING.version });
     if (ok) {
@@ -224,6 +225,19 @@ export async function draftScopeSummary({ params, env, sql, auth }) {
         };
         const summaryRes = await procoreFetch(env, ESTIMATING.summaryPath(env.PROCORE_COMPANY_ID, project.procore_project_id, primary.id), { version: ESTIMATING.version });
         if (summaryRes.ok) summary = ESTIMATING.parseSummary(summaryRes.data);
+
+        // Ben (2026-11-04): the draft should actually read the estimate's
+        // hours and margin, not just the proposal's rate settings above.
+        try {
+          const items = await procoreFetchAll(env, ESTIMATING.lineItemsPath(env.PROCORE_COMPANY_ID, project.procore_project_id, primary.id), {
+            version: ESTIMATING.version,
+            perPage: 100,
+            maxPages: 20,
+          });
+          estimateTotals = ESTIMATING.aggregateLineItems(items);
+        } catch {
+          estimateTotals = null;
+        }
       }
     }
   }
@@ -256,17 +270,24 @@ export async function draftScopeSummary({ params, env, sql, auth }) {
   let draft = "";
   try {
     draft = await callClaude(env, {
-      maxTokens: 700,
+      // Was 700 -- too tight for the "4-8 sentences" the prompt asks for once
+      // estimate_totals/tender_emails give it enough to say; Ben caught a real
+      // draft getting cut off mid-sentence (2026-11-04). Giving real headroom
+      // above the target length instead of a hard wall right at it.
+      maxTokens: 1500,
       system:
         "You draft a short 'scope of work' summary for an Einbau Services millwork-installation project handoff, for the incoming PM. " +
         "If a primary estimating proposal is given, its scope_of_work/inclusions/exclusions are the estimator's own words — " +
         "ground the draft in those rather than re-inventing them, and use the other material to fill gaps or add context. " +
+        "estimate_totals, if given, is computed directly from the live Procore estimate (total labor hours, total cost/sales, margin) — " +
+        "state those numbers as-is when relevant, never recompute or guess your own. " +
         "Use only the material given. If it's thin, say what's known and flag what's missing — do not invent scope. 4-8 sentences, plain prose, no bullet markup.",
       userMessage: JSON.stringify({
         project: { name: project.name, type: project.project_type, customer: project.customer?.name, address: project.address },
         bid: { name: bid.name, description: bid.description, estimate_total: bid.stats?.total, notes: bidNotes },
         primary_proposal: proposal,
         estimate_summary: summary,
+        estimate_totals: estimateTotals,
         tender_emails: emails,
       }),
     });

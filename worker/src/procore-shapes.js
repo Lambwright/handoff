@@ -613,6 +613,39 @@ export const ESTIMATING = {
   lineItemGroupsPath: (companyId, projectId, proposalId) =>
     `/companies/${companyId}/projects/${projectId}/estimating/proposals/${proposalId}/line_item_groups`,
 
+  // Aggregates a full line_items array (pull every page via lineItemsPath +
+  // procoreFetchAll) into the numbers gate.js's draftScopeSummary actually
+  // wants: total labor hours (not a Procore field -- derived per-line, same
+  // rule the labour-budget work confirmed) plus cost/sales/margin using the
+  // Σ(item_sales+labor_sales) === proposal.total identity documented above.
+  // Hours: a LABOR-type/HOURS-unit line's `quantity` IS the hours directly;
+  // any other line (a PART/MATERIAL-type cost item with its own embedded
+  // labor rate) derives hours as takeoff_quantity * unit_labor / 60 when
+  // labor_time_unit is HOURS (unit_labor is minutes-per-unit in that case --
+  // confirmed 2026-10-30 against a real line: 509.030706 * 9.6 / 60 = 81.44,
+  // exactly matching Procore's own "Total Labor Time" for that line).
+  aggregateLineItems(items) {
+    let hours = 0;
+    let cost = 0;
+    let sales = 0;
+    for (const li of items || []) {
+      const ci = li.cost_item || {};
+      if (ci.type === "LABOR" && ci.unit === "HOURS") {
+        hours += Number(li.quantity) || 0;
+      } else if (ci.labor_time_unit === "HOURS" && typeof ci.unit_labor === "number") {
+        hours += ((Number(li.takeoff_quantity) || 0) * ci.unit_labor) / 60;
+      }
+      cost += (Number(li.item_cost) || 0) + (Number(li.labor_cost) || 0);
+      sales += (Number(li.item_sales) || 0) + (Number(li.labor_sales) || 0);
+    }
+    return {
+      total_labor_hours: Math.round(hours * 100) / 100,
+      total_cost: Math.round(cost * 100) / 100,
+      total_sales: Math.round(sales * 100) / 100,
+      margin: sales > 0 ? Math.round(((sales - cost) / sales) * 1000) / 1000 : null,
+    };
+  },
+
   // data: the array of proposals, each e.g. {id, name, type, is_primary, total,
   // scope_of_work, inclusions, exclusions, notes, quote_nr, updated_at}.
   // type is "ESTIMATE" | "CHANGE_ORDER" — only ESTIMATE-type proposals are
