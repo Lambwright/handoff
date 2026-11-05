@@ -11,7 +11,7 @@ import Assignment from "./components/Assignment.jsx";
 import HandoffBrief from "./components/HandoffBrief.jsx";
 import Admin from "./components/Admin.jsx";
 import SidebarApp from "./components/SidebarApp.jsx";
-import ProjectView from "./components/ProjectView.jsx";
+import ProjectEmbed from "./components/ProjectEmbed.jsx";
 import Loading from "./components/Loading.jsx";
 import { getShellContext } from "./shell.js";
 
@@ -150,13 +150,14 @@ export default function App() {
     );
   }
 
-  // Procore project-level Full Screen tool — the PM read view for one Procore project.
+  // Procore project-level Full Screen tool — the checklist (pre-assignment) or
+  // read summary (post-assignment) for one Procore project. See ProjectEmbed.jsx.
   if (SHELL.embed && SHELL.procoreProjectId) {
     return (
       <div className="embed-mode">
         <Header user={user} actor={actor} currentHash="" onLogout={handleLogout} embed minimal />
         <div className="container">
-          <ProjectView procoreProjectId={SHELL.procoreProjectId} actor={actor} />
+          <ProjectEmbed procoreProjectId={SHELL.procoreProjectId} actor={actor} />
         </div>
       </div>
     );

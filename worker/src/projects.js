@@ -4,6 +4,7 @@
 import { json } from "./http.js";
 import { isPostCreation } from "./checklist.js";
 import { pmMayAccess } from "./auth.js";
+import { bindProjectToPushedBid } from "./bids.js";
 
 // A handoff's department is the one it was most recently assigned to.
 export async function listProjects({ url, sql, auth }) {
@@ -30,12 +31,31 @@ export async function listProjects({ url, sql, auth }) {
 }
 
 // GET /projects/by-procore/:procoreId — the HANDOFF handoff for a Procore
-// project id, or 404 if that project wasn't created through HANDOFF.
-export async function getProjectByProcore({ params, sql, auth }) {
-  const [project] = await sql`select * from projects where procore_project_id = ${params.procoreId}`;
-  if (!project || !(await pmMayAccess(sql, auth?.actor, project))) {
-    return json({ error: "not_found", detail: "This project wasn't created through HANDOFF." }, 404);
+// project id. Backs the Procore project-level embedded tool, which is now the
+// primary entry point (Ben, 2026-11-05): a project can exist before HANDOFF
+// ever heard of it (pushed to Portfolio natively, no HANDOFF step involved),
+// so a miss here first tries to lazily resolve + seed it from the bid that
+// was pushed (bindProjectToPushedBid) before giving up. A genuine miss (the
+// bid-cache scan hasn't reached it yet, or this project didn't come from a
+// tracked bid at all) returns "not_linked" so the frontend can offer the
+// manual bid/proposal-number fallback instead of a flat dead end.
+export async function getProjectByProcore({ params, env, sql, auth }) {
+  let [project] = await sql`select * from projects where procore_project_id = ${params.procoreId}`;
+
+  if (!project) {
+    project = await bindProjectToPushedBid(env, sql, {
+      procoreProjectId: params.procoreId,
+      createdBy: auth.actor.einbau_username,
+    });
   }
+
+  if (!project) {
+    return json(
+      { error: "not_linked", detail: "Couldn't find the bid this project came from yet." },
+      404
+    );
+  }
+  if (!(await pmMayAccess(sql, auth?.actor, project))) return json({ error: "not_found" }, 404);
   return json({ project });
 }
 

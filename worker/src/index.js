@@ -13,6 +13,10 @@
 //   GET  /bids                       (estimator, assignment, admin) Awarded Bid Board projects
 //   POST /handoffs                   (estimator, admin) open a handoff against a bid
 //   GET  /projects                   (any role) dashboard queue, ?status= filter
+//   GET  /projects/by-procore/:procoreId (any role) resolve/lazily bind a Procore
+//        project id (the project-level embed's entry point) to its handoff
+//   POST /projects/link-bid          (estimator, pm, admin) manual fallback for
+//        the above when the bid-cache scan hasn't caught up yet
 //   GET  /projects/:id/gate          (any role) the gate-task list
 //   PATCH /gate-tasks/:id            (estimator, pm, admin) set value / defer+reason
 //   POST /gate-tasks/:id/verify      (estimator, pm, admin) self-report -> live Procore check
@@ -39,7 +43,7 @@ import { json, preflight } from "./http.js";
 import { sqlFor } from "./db.js";
 import { makeRouter } from "./router.js";
 import { getMe, listRegions, listTimezones, listFiscalYearOptions, listCurrencyOptions, listPaymentTermsOptions, listBidStageHistory, procoreProbe } from "./admin.js";
-import { listAwardedBids, openHandoff, refreshBids } from "./bids.js";
+import { listAwardedBids, openHandoff, refreshBids, linkProjectToBid } from "./bids.js";
 import { searchCustomerDirectory } from "./matching.js";
 import {
   getGate,
@@ -84,6 +88,7 @@ router.post("/handoffs", { roles: ["estimator"] }, openHandoff);
 
 router.get("/projects", { roles: [] }, listProjects);
 router.get("/projects/by-procore/:procoreId", { roles: [] }, getProjectByProcore);
+router.post("/projects/link-bid", { roles: ["estimator", "pm", "admin"] }, linkProjectToBid);
 router.get("/projects/:id/summary", { roles: [] }, getProjectSummary);
 router.get("/customer-search", { roles: [] }, searchCustomerDirectory);
 router.get("/projects/:id/gate", { roles: [] }, getGate);

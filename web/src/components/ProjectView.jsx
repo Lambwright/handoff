@@ -4,12 +4,13 @@ import GapResolution from "./GapResolution.jsx";
 import Loading from "./Loading.jsx";
 import { useGateOptions } from "../useGateOptions.js";
 
-// The Procore project-level Full Screen tool. Given a Procore project id, shows
-// the incoming PM everything HANDOFF holds for that project: the AI handoff
-// brief, the PO / tender documents, the PM-assignment decision + reasoning, key
-// info, and any gap still open (resolvable inline via the shared GapResolution
-// component). Read-oriented; the estimator's gate work happens in the company
-// tool.
+// The Procore project-level Full Screen tool's read view, shown once a handoff
+// is assigned/complete (ProjectEmbed.jsx routes here vs. PurgatoryGate based on
+// status — see its header comment). Given an already-resolved HANDOFF project
+// id, shows the incoming PM everything HANDOFF holds: the AI handoff brief,
+// the PO / tender documents, the PM-assignment decision + reasoning, key info,
+// and any gap still open (resolvable inline via the shared GapResolution
+// component).
 const BRIEF_SECTIONS = [
   ["scope", "Scope of Work"],
   ["challenges", "Known Challenges / Open Items"],
@@ -19,10 +20,9 @@ const BRIEF_SECTIONS = [
   ["key_dates", "Key Dates"],
 ];
 
-export default function ProjectView({ procoreProjectId, actor }) {
-  const [handoffId, setHandoffId] = useState(null);
+export default function ProjectView({ handoffId, actor }) {
   const [data, setData] = useState(null);
-  const [status, setStatus] = useState("loading"); // loading | none | ready | error
+  const [status, setStatus] = useState("loading"); // loading | ready | error
   const [error, setError] = useState(null);
   const gateOptions = useGateOptions();
 
@@ -40,31 +40,11 @@ export default function ProjectView({ procoreProjectId, actor }) {
   }, []);
 
   useEffect(() => {
-    api
-      .getHandoffByProcoreId(procoreProjectId)
-      .then(({ project }) => {
-        setHandoffId(project.id);
-        return loadSummary(project.id);
-      })
-      .catch((e) => {
-        if (e.status === 404) setStatus("none");
-        else {
-          setError(e.message);
-          setStatus("error");
-        }
-      });
-  }, [procoreProjectId, loadSummary]);
+    loadSummary(handoffId);
+  }, [handoffId, loadSummary]);
 
   if (status === "loading") return <Loading />;
   if (status === "error") return <div className="card" style={{ color: "var(--red)" }}>{error}</div>;
-  if (status === "none") {
-    return (
-      <div className="card">
-        <div className="card-title">Not a HANDOFF project</div>
-        <p>This project wasn't created through HANDOFF, so there's no handoff brief or gate history for it here.</p>
-      </div>
-    );
-  }
 
   const { project, brief, assignment, docs, gaps } = data;
   const content = brief?.content || {};

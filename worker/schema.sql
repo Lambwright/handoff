@@ -237,9 +237,12 @@ create table bid_cache (
   estimator_user_id text,
   snapshot jsonb not null,               -- the raw bid record
   run_id text,                           -- which scan pass last touched this row (for pruning)
-  refreshed_at timestamptz not null default now()
+  refreshed_at timestamptz not null default now(),
+  project_id text                        -- Procore's own bid.project_id, once pushed to Portfolio natively
+                                          -- (null until then) -- see bids.js's bindProjectToPushedBid
 );
 create index idx_bid_cache_refreshed on bid_cache (refreshed_at);
+create index idx_bid_cache_project_id on bid_cache (project_id) where project_id is not null;
 
 -- The Bid Board scan is incremental + resumable: a full pass is ~43 pages and
 -- exceeds a Worker's waitUntil budget, so each cron tick / manual refresh

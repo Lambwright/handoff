@@ -92,18 +92,22 @@ async function recordStageChanges(sql, rows, runId) {
 
 async function upsertBidRow(sql, bid, runId) {
   const d = BID_BOARD.toDraft(bid);
+  // project_id tracked even once non-null (Ben, 2026-11-05) -- the post-creation
+  // embed flow (bindProjectToPushedBid in this file) looks bids up by project_id
+  // to find what a freshly-pushed Procore project came from, so a pushed bid
+  // can't just drop out of the cache the moment it's converted.
   await sql`
     insert into bid_cache (bid_id, name, customer_name, customer_company_id, project_number,
-                           address, estimate_total, estimator_user_id, snapshot, run_id, refreshed_at)
+                           address, estimate_total, estimator_user_id, snapshot, run_id, refreshed_at, project_id)
     values (${String(bid.id)}, ${d.name}, ${d.customer_name}, ${d.customer_company_id}, ${d.project_number},
             ${JSON.stringify(d.address)}::jsonb, ${d.estimate_total}, ${d.estimator_user_id},
-            ${JSON.stringify(bid)}::jsonb, ${runId}, now())
+            ${JSON.stringify(bid)}::jsonb, ${runId}, now(), ${bid.project_id ? String(bid.project_id) : null})
     on conflict (bid_id) do update set
       name = excluded.name, customer_name = excluded.customer_name,
       customer_company_id = excluded.customer_company_id, project_number = excluded.project_number,
       address = excluded.address, estimate_total = excluded.estimate_total,
       estimator_user_id = excluded.estimator_user_id, snapshot = excluded.snapshot,
-      run_id = excluded.run_id, refreshed_at = excluded.refreshed_at`;
+      run_id = excluded.run_id, refreshed_at = excluded.refreshed_at, project_id = excluded.project_id`;
 }
 
 // Advances the incremental Bid Board scan by up to `maxPages` pages, upserting
@@ -146,7 +150,9 @@ export async function refreshBidCache(env, sql, { maxPages = BID_SCAN_MAX_PAGES 
     await recordStageChanges(sql, rows, runId);
 
     for (const b of rows) {
-      if (BID_BOARD.isReadyToHandOff(b)) await upsertBidRow(sql, b, runId);
+      // CHANGED 2026-11-05: cache every Awarded bid, not just the not-yet-pushed
+      // ones -- bindProjectToPushedBid needs pushed bids reachable by project_id.
+      if (BID_BOARD.isAwarded(b)) await upsertBidRow(sql, b, runId);
       scannedForCrm.push(b);
     }
     await sql`update bid_scan_state set last_page = ${page}, updated_at = now() where singleton = 1`;
@@ -164,7 +170,10 @@ export async function refreshBidCache(env, sql, { maxPages = BID_SCAN_MAX_PAGES 
 // GET /bids — the cached Awarded-not-handed-off bids, annotated with any handoff
 // already opened against them (so the picker offers "resume", not a duplicate).
 export async function listAwardedBids({ env, sql }) {
-  const cached = await sql`select * from bid_cache order by name`;
+  // project_id is null here = not yet pushed to Portfolio -- the cache also
+  // retains already-pushed bids now (see upsertBidRow), but those don't belong
+  // in this picker any more.
+  const cached = await sql`select * from bid_cache where project_id is null order by name`;
   const [state] = await sql`select full_pass_completed_at, last_page, updated_at from bid_scan_state where singleton = 1`;
 
   const ids = cached.map((r) => r.bid_id);
@@ -221,22 +230,15 @@ async function getBidRecord(env, sql, bidId) {
   return data?.data || data || null;
 }
 
-// POST /handoffs { bid_id } — idempotent on source_bid_id: resumes an existing
-// draft rather than erroring or duplicating.
-export async function openHandoff({ request, env, sql, auth }) {
-  const body = await request.json().catch(() => null);
-  const bidId = body?.bid_id ? String(body.bid_id) : null;
-  if (!bidId) return json({ error: "invalid_request", detail: "bid_id is required" }, 400);
-
-  const [existing] = await sql`select id from projects where source_bid_id = ${bidId}`;
-  if (existing) return json({ project_id: existing.id, resumed: true });
-
-  const bid = await getBidRecord(env, sql, bidId);
-  if (!bid) return json({ error: "not_found", detail: `bid ${bidId} not found` }, 404);
-  if (!BID_BOARD.isReadyToHandOff(bid)) {
-    return json({ error: "not_awarded", detail: "This bid isn't in the Awarded column, or already has a project." }, 409);
-  }
-
+// Shared by openHandoff (pre-creation: procoreProjectId omitted, 'gate' status
+// behaves as today) and bindProjectToPushedBid (post-creation: procoreProjectId
+// already known because the bid was already pushed natively — create.js's own
+// ensureProjectCreated guard skips re-creating it once procore_project_id is
+// set, so the EXISTING gate/submit pipeline already does the right thing here
+// with no further changes: PATCH the real fields onto the real project instead
+// of creating a new one). Same field-copy seed either way — bid_id must
+// already be known Awarded (caller's job to have checked that).
+async function seedProjectRow(env, sql, bid, { createdBy, procoreProjectId = null }) {
   const draft = BID_BOARD.toDraft(bid);
   const projectType = normalizeType(draft.project_type); // null off the bid — estimator sets it in the gate
 
@@ -253,12 +255,12 @@ export async function openHandoff({ request, env, sql, auth }) {
   }
 
   const [project] = await sql`
-    insert into projects (source_bid_id, name, project_number, project_type, bid_snapshot,
+    insert into projects (source_bid_id, procore_project_id, name, project_number, project_type, bid_snapshot,
                           address, customer, timeline, created_by)
-    values (${bidId}, ${draft.name}, ${draft.project_number}, ${projectType},
+    values (${String(bid.id)}, ${procoreProjectId}, ${draft.name}, ${draft.project_number}, ${projectType},
             ${JSON.stringify(bid)}::jsonb, ${JSON.stringify(draft.address)}::jsonb,
             ${JSON.stringify(customerSeed)}::jsonb, ${JSON.stringify(draft.timeline)}::jsonb,
-            ${auth.actor.einbau_username})
+            ${createdBy})
     returning *`;
 
   // Currency/payment-terms default by name, not position — explicit beats
@@ -302,5 +304,75 @@ export async function openHandoff({ request, env, sql, auth }) {
   // The timezone guess also lands on the projects row so create.js can push it.
   if (tzGuess) await sql`update projects set timezone = ${tzGuess} where id = ${project.id}`;
 
+  return project;
+}
+
+// POST /handoffs { bid_id } — idempotent on source_bid_id: resumes an existing
+// draft rather than erroring or duplicating.
+export async function openHandoff({ request, env, sql, auth }) {
+  const body = await request.json().catch(() => null);
+  const bidId = body?.bid_id ? String(body.bid_id) : null;
+  if (!bidId) return json({ error: "invalid_request", detail: "bid_id is required" }, 400);
+
+  const [existing] = await sql`select id from projects where source_bid_id = ${bidId}`;
+  if (existing) return json({ project_id: existing.id, resumed: true });
+
+  const bid = await getBidRecord(env, sql, bidId);
+  if (!bid) return json({ error: "not_found", detail: `bid ${bidId} not found` }, 404);
+  if (!BID_BOARD.isReadyToHandOff(bid)) {
+    return json({ error: "not_awarded", detail: "This bid isn't in the Awarded column, or already has a project." }, 409);
+  }
+
+  const project = await seedProjectRow(env, sql, bid, { createdBy: auth.actor.einbau_username });
+  return json({ project_id: project.id, resumed: false }, 201);
+}
+
+// Post-creation entry point (Ben, 2026-11-05): the estimator pushes the bid to
+// Portfolio natively in Procore first (no HANDOFF step blocks that any more),
+// then opens the Procore project-level embedded tool. That tool hands us a
+// procore_project_id HANDOFF has never seen. Resolve it to the bid that was
+// pushed (bid_cache now retains Awarded bids after they're pushed too, see
+// refreshBidCache below, indexed by project_id) and seed the same way
+// openHandoff always has. `status` stays the default 'gate' even though
+// procore_project_id is already set -- create.js's ensureProjectCreated
+// already no-ops when procore_project_id is present, so the existing
+// gate/submit pipeline PATCHes the real fields onto the real project instead
+// of creating a new one, with no changes needed there.
+export async function bindProjectToPushedBid(env, sql, { procoreProjectId, createdBy }) {
+  const [existing] = await sql`select * from projects where procore_project_id = ${procoreProjectId}`;
+  if (existing) return existing;
+
+  const [cached] = await sql`select bid_id from bid_cache where project_id = ${String(procoreProjectId)}`;
+  if (!cached) return null; // not found -- caller falls back to the manual-link form
+
+  const bid = await getBidRecord(env, sql, cached.bid_id);
+  if (!bid) return null;
+
+  return seedProjectRow(env, sql, bid, { createdBy, procoreProjectId });
+}
+
+// POST /projects/link-bid { procore_project_id, bid_id } — the manual fallback
+// when the automatic lookup above hasn't caught up yet (bid_cache scan lag) or
+// a bid was pushed from somewhere this scan doesn't reach. Confirms the bid
+// actually points at the given project before seeding, so a typo can't bind
+// the wrong project.
+export async function linkProjectToBid({ request, env, sql, auth }) {
+  const body = await request.json().catch(() => null);
+  const procoreProjectId = body?.procore_project_id ? String(body.procore_project_id) : null;
+  const bidId = body?.bid_id ? String(body.bid_id) : null;
+  if (!procoreProjectId || !bidId) {
+    return json({ error: "invalid_request", detail: "procore_project_id and bid_id are required" }, 400);
+  }
+
+  const [existing] = await sql`select * from projects where procore_project_id = ${procoreProjectId}`;
+  if (existing) return json({ project_id: existing.id, resumed: true });
+
+  const bid = await getBidRecord(env, sql, bidId);
+  if (!bid) return json({ error: "not_found", detail: `bid ${bidId} not found` }, 404);
+  if (String(bid.project_id || "") !== procoreProjectId) {
+    return json({ error: "mismatch", detail: "That bid isn't linked to this Procore project in Procore." }, 409);
+  }
+
+  const project = await seedProjectRow(env, sql, bid, { createdBy: auth.actor.einbau_username, procoreProjectId });
   return json({ project_id: project.id, resumed: false }, 201);
 }
