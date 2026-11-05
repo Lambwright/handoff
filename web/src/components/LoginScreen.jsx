@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { login } from "../auth.js";
 
-export default function LoginScreen({ onLoggedIn }) {
+export default function LoginScreen({ onLoggedIn, remember = false }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
@@ -13,7 +13,7 @@ export default function LoginScreen({ onLoggedIn }) {
     setBusy(true);
     setError(null);
     try {
-      const user = await login(username.trim(), password);
+      const user = await login(username.trim(), password, remember);
       onLoggedIn(user);
     } catch (err) {
       setError(err.message);

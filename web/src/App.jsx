@@ -115,7 +115,7 @@ export default function App() {
     );
   }
   if (authState === "out") {
-    return wrap(<LoginScreen onLoggedIn={handleLoggedIn} />);
+    return wrap(<LoginScreen onLoggedIn={handleLoggedIn} remember={SHELL.embed} />);
   }
 
   if (!actor) {

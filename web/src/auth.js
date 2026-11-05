@@ -39,11 +39,16 @@ const LOGIN_ERROR_MESSAGES = {
   invalid_request: "Enter a username and password.",
 };
 
-export async function login(username, password) {
+// `remember` mirrors LEDGER's own Procore-sidebar login (frontend/src/auth.js)
+// -- a longer-lived session (auth-worker's REMEMBER_TTL_SECONDS, 14 days vs.
+// the standard 8h) for the embedded context specifically, since reaching it
+// at all already means Procore's own login already gated the way in (Ben,
+// 2026-11-05). App.jsx passes this through from SHELL.embed.
+export async function login(username, password, remember = false) {
   const res = await fetch(`${AUTH_BASE}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password, remember }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.token) {
