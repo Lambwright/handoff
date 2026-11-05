@@ -23,7 +23,7 @@ function stageLink(hash) {
 // without a real value or an honest deferral reason).
 // Mirror of checklist.js: items done in Procore AFTER the project exists — they
 // don't appear on the pre-create page and don't block the submit.
-const POST_CREATION = new Set(["tender_correspondence", "scope_summary", "estimates_reviewed"]);
+const POST_CREATION = new Set(["tender_correspondence", "scope_summary", "estimates_reviewed", "build_budget"]);
 
 export default function PurgatoryGate({ projectId, actor }) {
   const [project, setProject] = useState(null);

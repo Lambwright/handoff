@@ -112,6 +112,9 @@ async function loadActiveProjects(env) {
 // `isPm` is the main roster: HANDOFF level 'pm'. Anyone with a department who
 // isn't a PM is support: assignable and filterable, but not presented as a
 // main option. Department-less PMs are kept so they can be reported.
+// `pc` (Project Coordinator, added 2026-11-05) is excluded outright, even if
+// HELM happens to have a department set on them -- Ben: never assignable as a
+// PM candidate, full stop, not just "not on the main roster."
 async function loadAssignablePeople(env, request) {
   const token = (request.headers.get("Authorization") || "").replace(/^Bearer /, "");
   const res = await env.AUTH_WORKER.fetch(`${env.AUTH_WORKER_URL}/auth/app/users`, {
@@ -139,7 +142,7 @@ async function loadAssignablePeople(env, request) {
         rpPerson: u.rpPerson || null,
       };
     })
-    .filter((p) => p.isPm || p.department_id);
+    .filter((p) => p.level !== "pc" && (p.isPm || p.department_id));
 }
 
 // Every person who can be assigned a handoff: anyone with a department.

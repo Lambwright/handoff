@@ -48,7 +48,10 @@ export function isServiceCaller(request, env) {
   return Boolean(key) && Boolean(env.HANDOFF_SERVICE_KEY) && key === env.HANDOFF_SERVICE_KEY;
 }
 
-const HANDOFF_LEVELS = ["admin", "estimator", "assignment", "pm", "viewer"];
+// pc (Project Coordinator) added 2026-11-05: same checklist access as pm, plus
+// the budget-build task pm/estimator don't see -- but never assignable as a PM
+// candidate (assignment.js excludes it explicitly) and can't start a handoff.
+const HANDOFF_LEVELS = ["admin", "estimator", "assignment", "pm", "pc", "viewer"];
 
 // Role comes entirely from auth-worker's appRoles.HANDOFF (role matrix) — the
 // "access"/legacy-users-table fallback was the deploy-before-flip bridge;

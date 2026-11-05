@@ -8,7 +8,7 @@
 // halfway) never repeats a write that already landed.
 
 import { procoreFetch } from "./procore.js";
-import { PROJECT, STAGES, DIRECTORY, DOCUMENTS, EMAIL_TOOL, ESTIMATE_RENAME } from "./procore-shapes.js";
+import { PROJECT, STAGES, DIRECTORY, DOCUMENTS, EMAIL_TOOL, ESTIMATE_RENAME, BUDGET } from "./procore-shapes.js";
 import { batched } from "./util.js";
 
 async function markProgress(sql, projectId, patch) {
@@ -266,6 +266,14 @@ export async function verifyBackedTask(env, project, task) {
     });
     const folder = ok ? (data || []).find((d) => d.name === DOCUMENTS.PO_FOLDER_NAME) : null;
     return { found: Boolean(folder), note: folder ? `found "${DOCUMENTS.PO_FOLDER_NAME}"` : "folder not found" };
+  }
+  if (task.verify_backing === "budget_line_items") {
+    const { ok, data } = await procoreFetch(env, BUDGET.lineItemsPath(env.PROCORE_COMPANY_ID, project.procore_project_id), {
+      version: BUDGET.version,
+      query: { per_page: 1 },
+    });
+    const count = ok && Array.isArray(data?.data) ? data.data.length : 0;
+    return { found: count > 0, note: ok ? (count > 0 ? "budget has line items" : "budget is empty") : "Procore request failed" };
   }
   return { found: false, note: `no verifier for backing "${task.verify_backing}"` };
 }

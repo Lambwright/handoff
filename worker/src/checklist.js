@@ -149,6 +149,20 @@ export const CHECKLIST_REGISTRY = [
     types: { "T&M": false, Contract: true, "Service Call": true, Warranty: false, Overhead: false },
     gap_owner: "estimator",
   },
+  {
+    key: "build_budget",
+    label: "Build the Procore Budget",
+    input: "self_verify",
+    required: false, // Ben (2026-11-05): doesn't block PM assignment -- it's for field crews during execution, not the handoff itself
+    post_creation: true,
+    types: CONTRACTISH,
+    verify_backing: "budget_line_items",
+    gap_owner: "pc",
+    // Ben (2026-11-05): done by Ben or a Project Coordinator, never estimating or
+    // PM -- hidden from both, not just de-emphasized. See isTaskVisibleTo below.
+    visible_to: ["pc", "admin"],
+    help: "Export this estimate to the Procore Budget tool (Estimating > Export > Budget Template), then confirm here. Feeds the Labour Budget generator.",
+  },
 ];
 
 // Map whatever Procore calls the project/bid type onto one of PROJECT_TYPES.
@@ -165,6 +179,16 @@ export function normalizeType(raw) {
 
 export function isPostCreation(taskType) {
   return Boolean(CHECKLIST_REGISTRY.find((i) => i.key === taskType)?.post_creation);
+}
+
+// Most tasks are visible/editable by anyone who can open the checklist
+// (estimator/pm/pc/admin) -- registry items without a `visible_to` keep that
+// default. A few (build_budget) are scoped to specific roles -- hidden, not
+// just de-emphasized, from anyone else. admin always sees everything.
+export function isTaskVisibleTo(taskType, role) {
+  const item = CHECKLIST_REGISTRY.find((i) => i.key === taskType);
+  if (!item?.visible_to) return true;
+  return role === "admin" || item.visible_to.includes(role);
 }
 
 // Mirrors gateIsComplete's pre-creation check (gate.js), but for the

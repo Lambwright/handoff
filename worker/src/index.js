@@ -88,17 +88,17 @@ router.post("/handoffs", { roles: ["estimator"] }, openHandoff);
 
 router.get("/projects", { roles: [] }, listProjects);
 router.get("/projects/by-procore/:procoreId", { roles: [] }, getProjectByProcore);
-router.post("/projects/link-bid", { roles: ["estimator", "pm", "admin"] }, linkProjectToBid);
+router.post("/projects/link-bid", { roles: ["estimator", "pm", "pc", "admin"] }, linkProjectToBid);
 router.get("/projects/:id/summary", { roles: [] }, getProjectSummary);
 router.get("/customer-search", { roles: [] }, searchCustomerDirectory);
 router.get("/projects/:id/gate", { roles: [] }, getGate);
-router.patch("/gate-tasks/:id", { roles: ["estimator", "pm"] }, patchGateTask);
-router.post("/gate-tasks/:id/verify", { roles: ["estimator", "pm"] }, verifyGateTask);
+router.patch("/gate-tasks/:id", { roles: ["estimator", "pm", "pc"] }, patchGateTask);
+router.post("/gate-tasks/:id/verify", { roles: ["estimator", "pm", "pc"] }, verifyGateTask);
 router.post("/projects/:id/gate/po-document", { roles: ["estimator"] }, (ctx) =>
   uploadGateDocument(ctx, "po_document")
 );
 router.post("/projects/:id/gate/submit", { roles: ["estimator", "admin"] }, submitGate);
-router.post("/projects/:id/scope-draft", { roles: ["estimator", "pm"] }, draftScopeSummary);
+router.post("/projects/:id/scope-draft", { roles: ["estimator", "pm", "pc"] }, draftScopeSummary);
 
 router.get("/pm-roster", { roles: [] }, getPmRoster);
 router.get("/assignment-departments", { roles: [] }, getAssignmentDepartments);

@@ -703,6 +703,26 @@ export const ESTIMATING = {
 };
 
 // ---------------------------------------------------------------------------
+// Budget — a DIFFERENT Procore tool from Estimating, populated only after
+// someone manually runs "Export > Budget Template" from the Estimating tool
+// (Ben, 2026-11-05 -- an existing step Ben/a PC already does, not new). Unlike
+// the Estimating API, this surface DOES carry Budget Code + its plain-language
+// name, together, per line -- CONFIRMED live 2026-11-05 against the real
+// PharMed project after running that export:
+//   {quantity, unit_cost, uom, original_budget_amount,
+//    wbs_code: {id, flat_code, description}}
+// flat_code is the Budget Code (e.g. "49-01-05-05.L"), description is its
+// plain-language name (e.g. "Millwork Install.Labor") -- exactly the two
+// fields the Estimating API has never had. This is what checklist.js's
+// build_budget task verifies against, and what the Labour Budget generator
+// reads once that task is confirmed.
+// ---------------------------------------------------------------------------
+export const BUDGET = {
+  version: "v2.0",
+  lineItemsPath: (companyId, projectId) => `/companies/${companyId}/projects/${projectId}/budget_line_items`,
+};
+
+// ---------------------------------------------------------------------------
 // Resource Planning (first startup task)
 //
 // CORRECTED 2026-10-01 from punch-worker's proven live code — the original

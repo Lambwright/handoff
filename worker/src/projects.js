@@ -2,7 +2,7 @@
 // Full Screen tool's PM read view).
 
 import { json } from "./http.js";
-import { isPostCreation } from "./checklist.js";
+import { isPostCreation, isTaskVisibleTo } from "./checklist.js";
 import { pmMayAccess } from "./auth.js";
 import { bindProjectToPushedBid } from "./bids.js";
 
@@ -74,12 +74,13 @@ export async function getProjectSummary({ params, sql, auth }) {
     sql`select * from notifications where project_id = ${params.id} order by created_at desc`,
   ]);
 
+  const visibleTasks = gateTasks.filter((t) => isTaskVisibleTo(t.task_type, auth?.actor?.role));
   return json({
     project,
-    gate_tasks: gateTasks,
+    gate_tasks: visibleTasks,
     // Open items for the PM view: deferred, failed verification, or a
     // post-creation task not yet done (tender emails).
-    gaps: gateTasks.filter(
+    gaps: visibleTasks.filter(
       (t) =>
         ["deferred", "verify_failed"].includes(t.status) ||
         (isPostCreation(t.task_type) && t.status !== "complete")

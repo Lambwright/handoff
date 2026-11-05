@@ -4,7 +4,7 @@
 
 import { json } from "./http.js";
 import { runCreatePipeline, verifyBackedTask, pushOneDocument, FIELD_PUSHERS } from "./create.js";
-import { isPostCreation } from "./checklist.js";
+import { isPostCreation, isTaskVisibleTo } from "./checklist.js";
 import { callClaude } from "./claude.js";
 import { procoreFetch, procoreFetchAll } from "./procore.js";
 import { pmMayAccess } from "./auth.js";
@@ -21,7 +21,8 @@ async function loadProjectAndTasks(sql, projectId) {
 export async function getGate({ params, sql, auth }) {
   const { project, tasks } = await loadProjectAndTasks(sql, params.id);
   if (!project || !(await pmMayAccess(sql, auth?.actor, project))) return json({ error: "not_found" }, 404);
-  return json({ project, tasks });
+  const visible = tasks.filter((t) => isTaskVisibleTo(t.task_type, auth?.actor?.role));
+  return json({ project, tasks: visible });
 }
 
 // A gate task is either completed with a value, or explicitly deferred with a
@@ -40,6 +41,7 @@ export async function patchGateTask({ params, request, env, sql, auth }) {
 
   const [task] = await sql`select * from gate_tasks where id = ${params.id}`;
   if (!task) return json({ error: "not_found" }, 404);
+  if (!isTaskVisibleTo(task.task_type, auth.actor.role)) return json({ error: "not_found" }, 404);
 
   const [project] = await sql`select * from projects where id = ${task.project_id}`;
   if (!(await pmMayAccess(sql, auth?.actor, project))) return json({ error: "not_found" }, 404);
@@ -119,6 +121,7 @@ export async function patchGateTask({ params, request, env, sql, auth }) {
 export async function verifyGateTask({ params, env, sql, auth }) {
   const [task] = await sql`select * from gate_tasks where id = ${params.id}`;
   if (!task) return json({ error: "not_found" }, 404);
+  if (!isTaskVisibleTo(task.task_type, auth.actor.role)) return json({ error: "not_found" }, 404);
   if (!task.verify_backing) return json({ error: "not_verifiable", detail: "This item has no live-check backing it." }, 400);
 
   const [project] = await sql`select * from projects where id = ${task.project_id}`;

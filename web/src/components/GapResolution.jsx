@@ -25,6 +25,7 @@ const TASK_INPUT_TYPES = {
   tender_correspondence: "forward_verify", // done in Procore post-creation, then verified
   scope_summary: "scope_draft", // AI draft + estimator edit, post-creation
   estimates_reviewed: "text",
+  build_budget: "self_verify", // done in Procore (by a PC/admin) post-creation, then verified
 };
 
 // region/currency/payment_terms/fiscal_year are real Procore ids, keyed by
@@ -303,6 +304,20 @@ export default function GapResolution({
         </div>
       )}
 
+      {editable && input === "self_verify" && (
+        <div className="checklist-item-body">
+          {!project?.procore_project_id ? (
+            <div className="row-secondary">Available once the project is created.</div>
+          ) : (
+            <div className="checklist-item-actions">
+              <button className="btn btn-accent btn-sm" disabled={busy} onClick={retryVerify}>
+                I've done it — check
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {editable && input === "customer" && (
         <div className="checklist-item-body">
           {task.value?.suggestion?.confidence === "high" && task.value.suggestion.match && (
@@ -344,7 +359,7 @@ export default function GapResolution({
         </div>
       )}
 
-      {editable && input !== "file" && input !== "customer" && input !== "forward_verify" && input !== "scope_draft" && (
+      {editable && input !== "file" && input !== "customer" && input !== "forward_verify" && input !== "scope_draft" && input !== "self_verify" && (
         <div className="checklist-item-body">
           <ValueInput
             task={task}
@@ -377,14 +392,14 @@ export default function GapResolution({
         </div>
       )}
 
-      {editable && (input === "file" || input === "customer" || input === "forward_verify" || input === "scope_draft") && !showDefer && (
+      {editable && (input === "file" || input === "customer" || input === "forward_verify" || input === "scope_draft" || input === "self_verify") && !showDefer && (
         <div className="checklist-item-actions" style={{ marginTop: 6 }}>
           <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setShowDefer(true)}>
             Defer instead
           </button>
         </div>
       )}
-      {editable && (input === "file" || input === "customer" || input === "forward_verify" || input === "scope_draft") && showDefer && (
+      {editable && (input === "file" || input === "customer" || input === "forward_verify" || input === "scope_draft" || input === "self_verify") && showDefer && (
         <div className="checklist-item-actions" style={{ marginTop: 6 }}>
           <input placeholder="Why not yet?" value={deferReason} onChange={(e) => setDeferReason(e.target.value)} style={{ flex: 1 }} />
           <button className="btn btn-ghost btn-sm" disabled={busy} onClick={saveDefer}>
@@ -404,6 +419,7 @@ export default function GapResolution({
           {input === "select" && (task.value?.name || task.value)}
           {input === "file" && task.value?.filename}
           {input === "forward_verify" && (task.verify_note || "Confirmed in Procore")}
+          {input === "self_verify" && (task.verify_note || "Confirmed in Procore")}
         </div>
       )}
     </div>
