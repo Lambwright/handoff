@@ -28,6 +28,8 @@
 //   POST /assignment/:id/recommend   (assignment, admin) Claude recommendation
 //   POST /assignment/:id/confirm     (assignment, admin) accept/override -> PATCH Procore
 //   GET  /briefs/:projectId          (any role) the persisted handoff brief
+//   GET  /projects/:id/labour-budget (pc, admin) the shaped Procore Budget
+//        data the Labour Budget PDF is built from (client-side, see web/)
 //   GET  /projects/:projectId/notifications (any role) the escalation ledger for one handoff
 //   GET  /pm-affinity                (assignment, admin) list
 //   POST /pm-affinity                (assignment, admin) upsert a row
@@ -61,6 +63,7 @@ import {
   getPmRoster,
 } from "./assignment.js";
 import { getBrief } from "./brief.js";
+import { getLabourBudget } from "./labour-budget.js";
 import { listAffinity, upsertAffinity } from "./affinity.js";
 import { listNotifications } from "./notify.js";
 import { listProjects, getProjectByProcore, getProjectSummary } from "./projects.js";
@@ -107,6 +110,7 @@ router.post("/assignment/:id/recommend", { roles: ["assignment"] }, postAssignme
 router.post("/assignment/:id/confirm", { roles: ["assignment"] }, confirmAssignment);
 
 router.get("/briefs/:projectId", { roles: [] }, getBrief);
+router.get("/projects/:id/labour-budget", { roles: ["pc", "admin"] }, getLabourBudget);
 router.get("/projects/:projectId/notifications", { roles: [] }, listNotifications);
 
 router.get("/pm-affinity", { roles: ["assignment"] }, listAffinity);

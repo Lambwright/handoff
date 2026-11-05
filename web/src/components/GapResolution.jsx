@@ -419,7 +419,18 @@ export default function GapResolution({
           {input === "select" && (task.value?.name || task.value)}
           {input === "file" && task.value?.filename}
           {input === "forward_verify" && (task.verify_note || "Confirmed in Procore")}
-          {input === "self_verify" && (task.verify_note || "Confirmed in Procore")}
+          {input === "self_verify" && (
+            <>
+              {task.verify_note || "Confirmed in Procore"}
+              {task.task_type === "build_budget" && (
+                <div style={{ marginTop: 6 }}>
+                  <a className="btn btn-accent btn-sm" href={`#/project/${projectId}/labour-budget`}>
+                    Open Labour Budget
+                  </a>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>

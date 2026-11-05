@@ -77,6 +77,7 @@ export const api = {
   getHandoffByProcoreId: (procoreId) => request(`/projects/by-procore/${encodeURIComponent(procoreId)}`),
   linkBid: (procoreProjectId, bidId) => request("/projects/link-bid", { method: "POST", body: { procore_project_id: procoreProjectId, bid_id: bidId } }),
   getProjectSummary: (projectId) => request(`/projects/${projectId}/summary`),
+  getLabourBudget: (projectId) => request(`/projects/${projectId}/labour-budget`),
   getGate: (projectId) => request(`/projects/${projectId}/gate`),
   patchGateTask: (taskId, fields) => request(`/gate-tasks/${taskId}`, { method: "PATCH", body: fields }),
   verifyGateTask: (taskId) => request(`/gate-tasks/${taskId}/verify`, { method: "POST", body: {} }),

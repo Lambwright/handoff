@@ -720,6 +720,60 @@ export const ESTIMATING = {
 export const BUDGET = {
   version: "v2.0",
   lineItemsPath: (companyId, projectId) => `/companies/${companyId}/projects/${projectId}/budget_line_items`,
+
+  // Splits a wbs_code into its optional sub-job prefix and the rest -- per
+  // budget_details.csv (Ben, 2026-11-05): a sub-job-scoped line's flat_code
+  // AND description both carry the sub job as a leading dot-joined segment
+  // ("01.49-03-01-01-07.L" / "01 - Powder Room.Vanity & Upper Unit/Mirror.Labor");
+  // a line with no sub-job breakdown has neither ("49-01-05-03.L" / "Service
+  // Call" directly) -- confirmed live on two real projects so far (neither
+  // had a sub-job breakdown). The prefixed case is inferred from the CSV, not
+  // yet seen in a live JSON row -- degrades to "no sub-job" rather than
+  // breaking if that inference is ever wrong.
+  splitSubJob(wbsCode) {
+    const flat = wbsCode?.flat_code || "";
+    const desc = wbsCode?.description || "";
+    const flatParts = flat.split(".");
+    const descParts = desc.split(".");
+    const hasSubJob = flatParts.length >= 3 && descParts.length >= 3;
+    return {
+      sub_job: hasSubJob ? descParts[0].trim() : null,
+      budget_code: hasSubJob ? flatParts.slice(1).join(".") : flat,
+      description: hasSubJob ? descParts.slice(1).join(".").trim() : desc,
+    };
+  },
+
+  // Hours a field crew can clock against -- only uom "hours" lines carry a
+  // labor-hours budget, rounded DOWN to the nearest 15 min (Ben's original
+  // spec, 2026-11-02).
+  roundHoursDown(quantity) {
+    return Math.floor((Number(quantity) || 0) * 4) / 4;
+  },
+
+  // Raw budget_line_items -> the Labour Budget's shape:
+  // [{sub_job, items: [{description, budget_code, quantity, uom, hours}]}]
+  // Insertion order preserved (first-seen sub job first); sub-job-less items
+  // collected under sub_job: null.
+  groupLineItems(items) {
+    const order = [];
+    const groups = new Map();
+    for (const li of items || []) {
+      const { sub_job, budget_code, description } = BUDGET.splitSubJob(li.wbs_code);
+      if (!groups.has(sub_job)) {
+        groups.set(sub_job, []);
+        order.push(sub_job);
+      }
+      const uom = li.uom || "";
+      groups.get(sub_job).push({
+        description,
+        budget_code,
+        quantity: Number(li.quantity) || 0,
+        uom,
+        hours: uom.toLowerCase() === "hours" ? BUDGET.roundHoursDown(li.quantity) : null,
+      });
+    }
+    return order.map((sub_job) => ({ sub_job, items: groups.get(sub_job) }));
+  },
 };
 
 // ---------------------------------------------------------------------------

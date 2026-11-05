@@ -345,6 +345,15 @@ export async function bindProjectToPushedBid(env, sql, { procoreProjectId, creat
   const [cached] = await sql`select bid_id from bid_cache where project_id = ${String(procoreProjectId)}`;
   if (!cached) return null; // not found -- caller falls back to the manual-link form
 
+  // Guards the same race openHandoff already guards against -- but ALSO a real
+  // case seen live (2026-11-05): a bid that already has a HANDOFF row from the
+  // old pre-creation flow (its procore_project_id now stale/orphaned, see
+  // procore-shapes.js's ESTIMATING comment) getting pushed natively too. Resume
+  // that existing row rather than crash on source_bid_id's unique constraint --
+  // same "idempotent, resume" contract as openHandoff.
+  const [existingByBid] = await sql`select * from projects where source_bid_id = ${String(cached.bid_id)}`;
+  if (existingByBid) return existingByBid;
+
   const bid = await getBidRecord(env, sql, cached.bid_id);
   if (!bid) return null;
 
@@ -366,6 +375,9 @@ export async function linkProjectToBid({ request, env, sql, auth }) {
 
   const [existing] = await sql`select * from projects where procore_project_id = ${procoreProjectId}`;
   if (existing) return json({ project_id: existing.id, resumed: true });
+
+  const [existingByBid] = await sql`select * from projects where source_bid_id = ${bidId}`;
+  if (existingByBid) return json({ project_id: existingByBid.id, resumed: true });
 
   const bid = await getBidRecord(env, sql, bidId);
   if (!bid) return json({ error: "not_found", detail: `bid ${bidId} not found` }, 404);

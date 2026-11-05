@@ -12,6 +12,7 @@ import HandoffBrief from "./components/HandoffBrief.jsx";
 import Admin from "./components/Admin.jsx";
 import SidebarApp from "./components/SidebarApp.jsx";
 import ProjectEmbed from "./components/ProjectEmbed.jsx";
+import LabourBudget from "./components/LabourBudget.jsx";
 import Loading from "./components/Loading.jsx";
 import { getShellContext } from "./shell.js";
 
@@ -23,6 +24,7 @@ function parseHash(hash) {
   if ((m = h.match(/^\/project\/([^/]+)\/gate$/))) return { view: "gate", id: m[1] };
   if ((m = h.match(/^\/project\/([^/]+)\/assignment$/))) return { view: "assignment", id: m[1] };
   if ((m = h.match(/^\/project\/([^/]+)\/brief$/))) return { view: "brief", id: m[1] };
+  if ((m = h.match(/^\/project\/([^/]+)\/labour-budget$/))) return { view: "labour-budget", id: m[1] };
   if ((m = h.match(/^\/bids(?:\?(.*))?$/))) return { view: "bids", openBidId: new URLSearchParams(m[1] || "").get("open") || null };
   if (h === "/admin") return { view: "admin" };
   return { view: "dashboard" };
@@ -174,6 +176,7 @@ export default function App() {
         {route.view === "gate" && <PurgatoryGate projectId={route.id} actor={actor} />}
         {route.view === "assignment" && <Assignment projectId={route.id} />}
         {route.view === "brief" && <HandoffBrief projectId={route.id} actor={actor} />}
+        {route.view === "labour-budget" && <LabourBudget projectId={route.id} />}
         {route.view === "admin" && <Admin actor={actor} helmName={user.helmName} />}
       </div>
     </div>
