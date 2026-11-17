@@ -48,7 +48,7 @@ async function refreshCache(env, sql) {
   if (rows.length) {
     await sql`
       insert into directory_contacts_cache
-        (procore_user_id, vendor_id, vendor_name, first_name, last_name, email, phone, title, is_active, refreshed_at)
+        (procore_user_id, vendor_id, vendor_name, first_name, last_name, email, phone, title, is_active)
       select * from unnest(
         ${rows.map((r) => r.procore_user_id)}::text[],
         ${rows.map((r) => r.vendor_id)}::text[],
@@ -93,7 +93,7 @@ async function refreshVendorsCache(env, sql) {
 
   if (rows.length) {
     await sql`
-      insert into directory_vendors_cache (directory_id, name, is_active, refreshed_at)
+      insert into directory_vendors_cache (directory_id, name, is_active)
       select * from unnest(
         ${rows.map((r) => r.directory_id)}::text[],
         ${rows.map((r) => r.name)}::text[],
