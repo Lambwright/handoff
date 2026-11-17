@@ -49,6 +49,7 @@ async function syncRowsToCrm(env, rows) {
           archived: b.archived,
           name: b.name,
           customer_name: b.customer_company?.name || null,
+          customer_company_id: b.customer_company?.id ? String(b.customer_company.id) : null,
         })),
       }),
     });
@@ -202,6 +203,20 @@ export async function listAwardedBids({ env, sql }) {
     cache_refreshed_at: state?.full_pass_completed_at || null,
     scan_in_progress: Boolean(state?.last_page && state.last_page > 0),
   });
+}
+
+// GET /admin/bids-missing-customer-id — cheap list for Ben to go fix these in
+// Procore (CRM -> HANDOFF, 2026-11-17): bid_cache already carries
+// customer_company_id for every Awarded bid (upsertBidRow), so this is just a
+// filter over data already on hand, no extra Procore calls or storage. Scoped
+// to the Awarded subset bid_cache holds (not literally every bid ever scanned)
+// -- that's also the subset actually headed through HANDOFF, so it's the one
+// worth fixing first.
+export async function listBidsMissingCustomerId({ sql }) {
+  const rows = await sql`
+    select bid_id, name, project_number, customer_name
+    from bid_cache where customer_company_id is null order by name`;
+  return json({ count: rows.length, bids: rows });
 }
 
 // POST /bids/refresh — advance the incremental Bid Board scan by a bounded chunk

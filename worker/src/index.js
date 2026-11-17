@@ -45,7 +45,7 @@ import { json, preflight } from "./http.js";
 import { sqlFor } from "./db.js";
 import { makeRouter } from "./router.js";
 import { getMe, listRegions, listTimezones, listFiscalYearOptions, listCurrencyOptions, listPaymentTermsOptions, listBidStageHistory, procoreProbe } from "./admin.js";
-import { listAwardedBids, openHandoff, refreshBids, linkProjectToBid } from "./bids.js";
+import { listAwardedBids, openHandoff, refreshBids, linkProjectToBid, listBidsMissingCustomerId } from "./bids.js";
 import { searchCustomerDirectory } from "./matching.js";
 import {
   getGate,
@@ -87,6 +87,7 @@ router.post("/admin/procore-probe", { roles: ["admin"] }, procoreProbe); // TEMP
 
 router.get("/bids", { roles: ["estimator", "assignment"] }, listAwardedBids);
 router.post("/bids/refresh", { roles: ["estimator", "assignment"] }, refreshBids);
+router.get("/admin/bids-missing-customer-id", { roles: ["admin"] }, listBidsMissingCustomerId);
 router.post("/handoffs", { roles: ["estimator"] }, openHandoff);
 
 router.get("/projects", { roles: [] }, listProjects);
